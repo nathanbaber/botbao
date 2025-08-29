@@ -4,7 +4,7 @@ import os
 import re
 from dotenv import load_dotenv; load_dotenv()
 load_dotenv()
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date, time 
 from uuid import uuid4
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from telegram.ext import (
@@ -12,6 +12,7 @@ from telegram.ext import (
     ConversationHandler, ContextTypes, filters
 )
 from telegram.error import BadRequest
+from telegram_bot_calendar import DetailedTelegramCalendar, LSTEP
 
 # Настройка логирования
 logging.basicConfig(
@@ -489,92 +490,151 @@ async def reply_to_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     else:
         await update.message.reply_text(f"{user_to_reply_id.mention_html()} не находится в активном чате или не найден.")
 
-
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Ответ на неизвестные команды."""
     await update.message.reply_text("Извините, я не понял эту команду. Пожалуйста, используйте кнопки или /help.")
     await send_main_menu(update, context)
 
 
-async def reserve_table_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    logger.info(f"Пользователь {update.effective_user.id} начал бронирование.")
-    context.user_data['reservation_data'] = {} # Инициализируем данные для бронирования
+# Функция, запускающая бронирование, которая теперь отображает календарь
+async def start_reservation(update: Update, context):
+    context.user_data['reservation_data'] = {} # Инициализация данных для бронирования
+    now = datetime.now()
 
-    # Клавиатура для выбора даты (сегодня, завтра, выбрать дату)
-    keyboard = [
-        ["Сегодня", "Завтра"],
-        ["Выбрать другую дату", "Отмена"]
-    ]
-    reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
+    # Создаем календарь
+    calendar, step = DetailedTelegramCalendar(
+        locale='ru',
+        min_date=now.date(), # Нельзя выбрать прошедшую дату
+        max_date=now.date() + timedelta(days=90) # Максимум на 3 месяца вперед
+    ).build()
 
     await update.message.reply_text(
-        "В какой день Вы планируете посетить наше бистро?",
-        reply_markup=reply_markup
+        "В какой день Вы планируете посетить наше бистро? Пожалуйста, выберите дату:",
+        reply_markup=calendar
     )
     return ASK_DATE
 
-# 2. Получение даты
-async def get_date(update: Update, context):
-    text = update.message.text
-    reservation_data = context.user_data['reservation_data']
-    today = datetime.now().date()
-    tomorrow = today + timedelta(days=1)
-    selected_date = None
+# Хендлер для обработки выбора даты из календаря
+async def process_date_selection(update: Update, context):
+    query = update.callback_query
+    await query.answer() # Обязательно ответить на CallbackQuery
 
-    if text.lower() == "отмена":
-        await update.message.reply_text("Бронирование отменено.", reply_markup=ReplyKeyboardRemove())
-        return ConversationHandler.END
+    now = datetime.now()
 
-    if text.lower() == "сегодня":
-        selected_date = today
-    elif text.lower() == "завтра":
-        selected_date = tomorrow
-    else:
-        # Попытка разобрать дату в формате DD.MM.YYYY
-        try:
-            selected_date = datetime.strptime(text, "%d.%m.%Y").date()
-        except ValueError:
-            await update.message.reply_text(
-                "Пожалуйста, введите дату в формате ДД.ММ.ГГГГ (например, 25.12.2023)"
+    # Обрабатываем клики по календарю
+    result, key, step = DetailedTelegramCalendar(
+        locale='ru',
+        min_date=now.date(),
+        max_date=now.date() + timedelta(days=90)
+    ).process(query.data)
+
+    if not result and key: # Пользователь еще выбирает месяц/год/день
+        await query.edit_message_text(
+            f"В какой день Вы планируете посетить наше бистро? Пожалуйста, выберите дату:",
+            reply_markup=key
+        )
+        return ASK_DATE
+    elif result: # Дата выбрана
+        selected_date = result
+        today = now.date()
+
+        # Повторная проверка на прошедшую дату (хотя min_date должен предотвратить)
+        if selected_date < today:
+            await query.edit_message_text(
+                "Эх, если бы мы могли бронировать столы на '"'вчера'"', мы бы сами там сидели!😉 Увы, машина времени пока в ремонте. Выберите, пожалуйста, дату, которая еще не наступила.",
+                reply_markup=None # Убираем календарь
             )
+            # Отправляем новый календарь для выбора
+            calendar, step = DetailedTelegramCalendar(
+                locale='ru',
+                min_date=today,
+                max_date=today + timedelta(days=90)
+            ).build()
+            await query.message.reply_text("Пожалуйста, выберите корректную дату:", reply_markup=calendar)
             return ASK_DATE
 
-    if selected_date < today:
-        await update.message.reply_text("Эх, если бы мы могли бронировать столы на '"'вчера'"', мы бы сами там сидели!😉 Увы, машина времени пока в ремонте. Выберите, пожалуйста, дату, которая еще не наступила.")
-        return ASK_DATE
+        context.user_data['reservation_data']['date'] = selected_date
+        logger.info(f"Дата бронирования выбрана: {selected_date}")
 
-    reservation_data['date'] = selected_date
-    await update.message.reply_text(
-        f"Отлично! Дата: {format_date_for_display(selected_date)}.\n"
-        "Теперь укажите желаемое время (например, 19:30):",
-        reply_markup=ReplyKeyboardMarkup([["Отмена"]], one_time_keyboard=True, resize_keyboard=True)
-    )
-    return ASK_TIME
-
-# 3. Получение времени
-async def get_time(update: Update, context):
-    text = update.message.text
-    reservation_data = context.user_data['reservation_data']
-
-    if text.lower() == "отмена":
-        await update.message.reply_text("Бронирование отменено.", reply_markup=ReplyKeyboardRemove())
-        return ConversationHandler.END
-
-    # Простая проверка формата времени HH:MM
-    if not re.match(r"^(?:2[0-3]|[01]?[0-9]):[0-5][0-9]$", text):
-        await update.message.reply_text("Неверный формат времени. Пожалуйста, введите время в формате ЧЧ:ММ (например, 19:00).")
+        await query.edit_message_text(
+            f"Отлично! Дата: {format_date_for_display(selected_date)}.\n"
+            "Теперь укажите желаемое время:",
+            reply_markup=generate_time_keyboard(selected_date) # Генерируем клавиатуру времени
+        )
         return ASK_TIME
 
-    # Дополнительная проверка на прошлое время, если дата "Сегодня"
-    selected_time = datetime.strptime(text, "%H:%M").time()
+
+def generate_time_keyboard(selected_date: date):
+    keyboard = []
+    now_dt = datetime.now() # Текущая дата и время
+    current_time = now_dt.time()
+    
+    #диапазон работы заведения
+    start_hour = 11
+    end_hour = 21 # До 21:00 включительно
+
+    time_slots = []
+    for hour in range(start_hour, end_hour + 1):
+        for minute_step in [0, 30]: # Шаги по 30 минут
+            slot_time = time(hour, minute_step)
+            
+            # Если дата "сегодня" и время слота уже прошло, пропускаем его
+            if selected_date == now_dt.date() and slot_time < current_time:
+                continue
+            
+            time_slots.append(slot_time)
+
+    # Размещаем кнопки времени по 4 в ряд
+    row = []
+    for i, slot in enumerate(time_slots):
+        row.append(InlineKeyboardButton(slot.strftime("%H:%M"), callback_data=f"time_{slot.strftime('%H:%M')}"))
+        if len(row) == 4 or i == len(time_slots) - 1: # Закрываем ряд каждые 4 кнопки или если это последняя
+            keyboard.append(row)
+            row = []
+    
+    keyboard.append([InlineKeyboardButton("Отмена бронирования", callback_data="cancel_reserve")])
+
+    return InlineKeyboardMarkup(keyboard)
+
+# Хендлер для обработки выбора времени из инлайн-клавиатуры
+async def process_time_selection(update: Update, context):
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "cancel_reserve":
+        await query.edit_message_text("❌ Бронирование отменено.", reply_markup=None)
+        context.user_data.pop('reservation_data', None)
+        return ConversationHandler.END
+
+    reservation_data = context.user_data['reservation_data']
+    
+    try:
+        # Извлекаем время из callback_data, например "time_19:30"
+        time_str = query.data.split('_')[1]
+        selected_time = datetime.strptime(time_str, "%H:%M").time()
+    except (IndexError, ValueError):
+        logger.error(f"Неверный формат callback_data для времени: {query.data}")
+        await query.edit_message_text(
+            "Произошла ошибка при выборе времени. Пожалуйста, попробуйте еще раз.",
+            reply_markup=generate_time_keyboard(reservation_data['date'])
+        )
+        return ASK_TIME
+
+    # Повторная проверка на прошедшее время, если дата "Сегодня"
+    # (Хотя generate_time_keyboard уже отфильтровывает, это дополнительная защита)
     if reservation_data['date'] == datetime.now().date() and selected_time < datetime.now().time():
-        await update.message.reply_text("Мы пока не умеем перемещаться в прошлое, поэтому выбрать это время не получится😁. Пожалуйста, укажите время, которое только предстоит.")
+        await query.edit_message_text(
+            "Мы пока не умеем перемещаться в прошлое, поэтому выбрать это время не получится😁. Пожалуйста, укажите время, которое только предстоит.",
+            reply_markup=generate_time_keyboard(reservation_data['date'])
+        )
         return ASK_TIME
 
     reservation_data['time'] = selected_time
-    await update.message.reply_text(
+    logger.info(f"Время бронирования выбрано: {selected_time}")
+
+    await query.edit_message_text(
         f"Время: {selected_time.strftime('%H:%M')}.\n"
-        "На сколько человек бронируем столик? (например, 4)",
+        "На сколько человек бронируем стол? (например, 4)",
         reply_markup=ReplyKeyboardMarkup([["Отмена"]], one_time_keyboard=True, resize_keyboard=True)
     )
     return ASK_GUESTS
@@ -586,6 +646,7 @@ async def get_guests(update: Update, context):
 
     if text.lower() == "отмена":
         await update.message.reply_text("Бронирование отменено.", reply_markup=ReplyKeyboardRemove())
+        context.user_data.pop('reservation_data', None)
         return ConversationHandler.END
 
     try:
@@ -615,6 +676,7 @@ async def get_name(update: Update, context):
 
     if text.lower() == "отмена":
         await update.message.reply_text("Бронирование отменено.", reply_markup=ReplyKeyboardRemove())
+        context.user_data.pop('reservation_data', None)
         return ConversationHandler.END
 
     reservation_data['name'] = text
@@ -631,8 +693,8 @@ async def get_phone(update: Update, context):
     reservation_data = context.user_data['reservation_data']
 
     if text.lower() == "отмена":
-        await update.message.reply_text("Бронирование отменено.",
-                                        reply_markup=ReplyKeyboardRemove())
+        await update.message.reply_text("Бронирование отменено.",reply_markup=ReplyKeyboardRemove())
+        context.user_data.pop('reservation_data', None)
         return ConversationHandler.END
 
     # Простая проверка на то, что это похоже на телефонный номер
@@ -655,6 +717,7 @@ async def get_wishes(update: Update, context):
 
     if text.lower() == "отмена":
         await update.message.reply_text("Бронирование отменено.", reply_markup=ReplyKeyboardRemove())
+        context.user_data.pop('reservation_data', None)
         return ConversationHandler.END
     elif text.lower() == "нет пожеланий":
         reservation_data['wishes'] = None
@@ -734,6 +797,7 @@ async def confirm_or_cancel_reservation(update: Update, context):
 
     elif query.data == "cancel_reserve":
         await query.edit_message_text("❌ Бронирование отменено.", reply_markup=None)
+        context.user_data.pop('reservation_data', None)
 
     # Очищаем данные пользователя после завершения диалога
     context.user_data.pop('reservation_data', None)
@@ -750,7 +814,7 @@ async def cancel_reservation(update: Update, context):
 async def fallback_handler(update: Update, context):
     await update.message.reply_text("Пожалуйста, следуйте инструкциям или нажмите 'Отмена'.")
     return ConversationHandler.END
-
+        
 async def make_order_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик команды /order."""
     await update.message.reply_text("Функция онлайн-заказа пока не доступна.Вы можете просмотреть наше меню, а для заказа свяжитесь с нами напрямую по телефону +7 (918) 582-31-51.",
@@ -835,12 +899,12 @@ def main() -> None:
     application.add_handler(CommandHandler("review", start_review))       # Теперь /review сразу начинает отзыв
     # Новые команды, для которых пока нет полной реализации
 
-# ConversationHandler для бронирования столиков
+# ConversationHandler для бронирования столов
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("reserve", reserve_table_command)],
+        entry_points=[CommandHandler("reserve", start_reservation)],
         states={
-            ASK_DATE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_date)],
-            ASK_TIME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_time)],
+            ASK_DATE: [CallbackQueryHandler(process_date_selection)], # Календарь
+            ASK_TIME:  [CallbackQueryHandler(process_time_selection, pattern="^time_.*|cancel_reserve$")], # Выбор времени и отмена
             ASK_GUESTS: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_guests)],
             ASK_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
             ASK_PHONE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_phone)],
@@ -851,6 +915,7 @@ def main() -> None:
             CommandHandler("cancel", cancel_reservation), # Команда /cancel для выхода из любого состояния
             MessageHandler(filters.TEXT & ~filters.COMMAND & filters.Regex(r"(?i)^отмена$"), cancel_reservation), # Кнопка "Отмена"
         ],
+        per_user=True,
         allow_reentry=True, # Позволяет пользователю начать новый разговор, даже если предыдущий не был завершен
     )
     application.add_handler(conv_handler)
@@ -861,6 +926,7 @@ def main() -> None:
     application.add_handler(CommandHandler("review", start_review))
     application.add_handler(CommandHandler("problem", start_problem))
     application.add_handler(CommandHandler("support", start_live_chat))
+    application.add_handler(CommandHandler("reserve", start_reservation))
 
     # Обработчик кнопки "Назад в главное меню"
     application.add_handler(CallbackQueryHandler(send_main_menu, pattern="^start$"))
