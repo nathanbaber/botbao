@@ -418,7 +418,7 @@ async def end_live_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         # Уведомляем админов о завершении чата
         await context.bot.send_message(
             chat_id=ADMIN_CHAT_ID,
-            text=f"ℹ️ {user.mention_html()} завершил чат.*",
+            text=f"ℹ️ Пользователь {user.mention_html()} завершил чат.",
             parse_mode="HTML"
         )
     else:
@@ -517,7 +517,7 @@ async def start_reservation(update: Update, context) -> int:
         max_date=now.date() + timedelta(days=30) # Максимум на 1 месяц вперед
     ).build()
 
-    await update.message.reply_text(
+    await target_message.reply_text(
         "В какой день Вы планируете посетить наше бистро? Пожалуйста, выберите дату:",
         reply_markup=calendar
     )
