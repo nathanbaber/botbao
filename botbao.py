@@ -162,7 +162,7 @@ async def show_menu_items(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     for item in items:
         message_text += f"*{item['name']}* \n"
         message_text += f"{item['description']} \n"
-        message_text += f"_Цена:_ {item['price']}'₽' \n\n"
+        message_text += f"_Цена:_ {item['price']}₽ \n\n"
 
     keyboard = [[InlineKeyboardButton("🔙 К категориям", callback_data="menu")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
