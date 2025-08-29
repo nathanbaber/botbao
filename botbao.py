@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 # --- КОНФИГУРАЦИЯ БОТА ---
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_CHAT_ID = int(os.getenv("ADMIN_CHAT_ID")) # Важно преобразовать в int
+ADMIN_CHAT_ID = int(os.getenv("ADMIN_CHAT_ID"))
            
 # --------------------------
 
@@ -51,10 +51,10 @@ os.makedirs(DATA_DIR, exist_ok=True)
 async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.photo:
         file_id = update.message.photo[-1].file_id
-        await update.message.reply_text(f"File ID для этой фотографии: Ⓝ{file_id}Ⓝ\n\nИспользуйте его в menu.json", parse_mode='Markdown')
+        await update.message.reply_text(f"File ID для этой фотографии: '{file_id}' \n\nИспользуйте его в menu.json", parse_mode='Markdown')
     elif update.message.document:
         file_id = update.message.document.file_id
-        await update.message.reply_text(f"File ID для этого документа: Ⓝ{file_id}Ⓝ\n\nИспользуйте его в menu.json", parse_mode='Markdown')
+        await update.message.reply_text(f"File ID для этого документа: '{file_id}' \n\nИспользуйте его в menu.json", parse_mode='Markdown')
     else:
         await update.message.reply_text("Пожалуйста, отправьте фотографию или файл.")
 
@@ -87,7 +87,7 @@ def get_main_keyboard():
     """Возвращает клавиатуру главного меню."""
     keyboard = [
         [InlineKeyboardButton("🍽️ Меню", callback_data="menu")],
-        [InlineKeyboardButton("❓ FAQ / Вопросы", callback_data="faq")],
+        [InlineKeyboardButton("❓ Вопросы", callback_data="faq")],
         [InlineKeyboardButton("✍️ Оставить отзыв", callback_data="review")],
         [InlineKeyboardButton("⚠️ Сообщить о проблеме", callback_data="problem")],
         [InlineKeyboardButton("🗣️ Связаться со службой поддержки", callback_data="support")]
@@ -114,20 +114,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик команды /start."""
     user = update.effective_user
     await update.message.reply_html(
-        f"Привет, {user.mention_html()}! 👋 Добро пожаловать в наш ресторанный бот.\n"
-        "Чем могу быть полезен?",
+        f"Здравствуйте, {user.mention_html()}! 👋 Добро пожаловать в службу заботы о гостях нашего Китайского бистро 'БАО'❤️.\n"
+        "Чем мы можем Вам помочь?",
         reply_markup=get_main_keyboard()
     )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик команды /help."""
     await update.message.reply_text(
-        "Я могу помочь вам:\n"
-        "- Показать меню\n"
-        "- Ответить на часто задаваемые вопросы\n"
-        "- Принять ваш отзыв или сообщение о проблеме\n"
-        "- Связать вас с оператором службы поддержки\n\n"
-        "Воспользуйтесь кнопками ниже, чтобы начать.",
+        "Мы можем:\n"
+        "- Показать Вам меню;\n"
+        "- Ответить на часто задаваемые вопросы;\n"
+        "- Принять Ваш отзыв или сообщение о проблеме;\n"
+        "- Связать Вас с менеджером службы заботы о наших гостях;\n\n"
+        "Воспользуйтесь кнопками ниже:",
         reply_markup=get_main_keyboard()
     )
 
@@ -141,7 +141,7 @@ async def show_menu_categories(update: Update, context: ContextTypes.DEFAULT_TYP
     keyboard = []
     for category in menu_data.keys():
         keyboard.append([InlineKeyboardButton(category, callback_data=f"menu_cat_{category}")])
-    keyboard.append([InlineKeyboardButton("🔙 Назад в главное меню", callback_data="start")])
+    keyboard.append([InlineKeyboardButton("🔙 В главное меню", callback_data="start")])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(text="Выберите категорию меню:", reply_markup=reply_markup)
@@ -160,9 +160,9 @@ async def show_menu_items(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     items = menu_data[category]
     message_text = f"--- {category} ---\n\n"
     for item in items:
-        message_text += f"*{item['name']}*\n"
-        message_text += f"{item['description']}\n"
-        message_text += f"_Цена: {item['price']}_\n\n"
+        message_text += f"*{item['name']}* \n"
+        message_text += f"{item['description']} \n"
+        message_text += f"_Цена:_ {item['price']}'₽' \n\n"
 
     keyboard = [[InlineKeyboardButton("🔙 К категориям", callback_data="menu")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
