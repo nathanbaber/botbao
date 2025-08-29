@@ -34,4 +34,15 @@
         .env
         *.env
         config.local.js
-        
+
+    # Visual Studio files
+    .vs/
+    *.vspscc
+    *.vssscc
+    *.user
+    *.suo
+    *.sln
+    *.pyproj # Добавьте это, чтобы Git тоже их игнорировал
+    
+
+.env

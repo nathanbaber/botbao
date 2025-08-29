@@ -3,6 +3,7 @@ import json
 import os
 import datetime
 from uuid import uuid4
+from dotenv import load_dotenv; load_dotenv()
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from telegram.ext import (
@@ -18,8 +19,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # --- КОНФИГУРАЦИЯ БОТА ---
-BOT_TOKEN = "8494689594:AAG_lhywYODYepoz1TwVOgzedMu7T35av3k"
-ADMIN_CHAT_ID = -4700970249
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+ADMIN_CHAT_ID = int(os.getenv("ADMIN_CHAT_ID")) # Важно преобразовать в int
+           
 # --------------------------
 
 # Состояния для ConversationHandler

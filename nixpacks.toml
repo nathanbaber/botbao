@@ -1,0 +1,7 @@
+    # nixpacks.toml
+    [build]
+    providers = ["python"]
+
+    [start]
+    cmd = "python botbao.py"
+    
