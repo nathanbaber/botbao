@@ -13,6 +13,7 @@ from telegram.ext import (
 )
 from telegram.error import BadRequest
 from telegram_bot_calendar import DetailedTelegramCalendar, LSTEP
+import html
 
 # Настройка логирования
 logging.basicConfig(
@@ -701,8 +702,14 @@ async def get_phone(update: Update, context):
     if not re.match(r"^\+?\d{10,15}$", text.replace(" ", "").replace("-", "")):
         await update.message.reply_text("Пожалуйста, введи корректный номер телефона (например, +79XXXXXXXXX).")
         return ASK_PHONE
+    else:
+        # Стандартизируем номер перед сохранением
+        standardized_phone = text.replace(" ", "").replace("-", "")
+        # Опционально: если номер начинается с 8, меняем на +7 (для России)
+        if standardized_phone.startswith("8") and len(standardized_phone) == 11:
+            standardized_phone = "+7" + standardized_phone[1:]
 
-    reservation_data['phone'] = text
+    reservation_data['phone'] = standardized_phone
     await update.message.reply_text(
         "Есть ли у Вас какие-то особые пожелания или комментарии к бронированию? "
         "(например, стол у окна, празднование дня рождения)",
@@ -897,18 +904,11 @@ def main() -> None:
     )
     application.add_handler(live_chat_conv_handler)
 
-    # Основные команды
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-
-    # Команды из BotFather:
-    application.add_handler(CommandHandler("menu", send_main_menu)) # Теперь /menu сразу ведет к категориям
-    application.add_handler(CommandHandler("review", start_review))       # Теперь /review сразу начинает отзыв
-    # Новые команды, для которых пока нет полной реализации
-
-# ConversationHandler для бронирования столов
+    # ConversationHandler для бронирования столов
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("reserve", start_reservation)],
+        entry_points=[CommandHandler("reserve", start_reservation),
+                      CallbackQueryHandler(start_reservation, pattern="^reserve$") # Если бронирование начинается с кнопки
+        ],
         states={
             ASK_DATE: [CallbackQueryHandler(process_date_selection)], # Календарь
             ASK_TIME:  [CallbackQueryHandler(process_time_selection, pattern="^time_.*|cancel_reserve$")], # Выбор времени и отмена
@@ -920,30 +920,33 @@ def main() -> None:
         },
         fallbacks=[
             CommandHandler("cancel", cancel_reservation), # Команда /cancel для выхода из любого состояния
+            CallbackQueryHandler(cancel_reservation, pattern="^cancel_reserve$"), # Кнопка отмены
+            CommandHandler("start", start),               # Команда /start для перезапуска бота
             MessageHandler(filters.TEXT & ~filters.COMMAND & filters.Regex(r"(?i)^отмена$"), cancel_reservation), # Кнопка "Отмена"
         ],
         per_user=True,
         allow_reentry=True, # Позволяет пользователю начать новый разговор, даже если предыдущий не был завершен
     )
-    application.add_handler(conv_handler)
-    application.add_handler(CommandHandler("order", make_order_command))     # Добавляем новый обработчик
 
-    application.add_handler(CommandHandler("menu", send_main_menu)) # Добавляем возможность прямого вызова меню
+    # Основные команды
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+
+    # Команды из BotFather:
+    application.add_handler(CommandHandler("menu", send_main_menu)) # Теперь /menu сразу ведет к категориям
+    application.add_handler(CommandHandler("review", start_review))       # Теперь /review сразу начинает отзыв
+    application.add_handler(CommandHandler("order", make_order_command))     # Добавляем новый обработчик
     application.add_handler(CommandHandler("faq", show_faq_questions)) # Добавляем возможность прямого вызова FAQ
-    application.add_handler(CommandHandler("review", start_review))
     application.add_handler(CommandHandler("problem", start_problem))
     application.add_handler(CommandHandler("support", start_live_chat))
     application.add_handler(CommandHandler("reserve", start_reservation))
 
     # Обработчик кнопки "Назад в главное меню"
     application.add_handler(CallbackQueryHandler(send_main_menu, pattern="^start$"))
-
     # Команда для админов, чтобы отвечать пользователям
     application.add_handler(CommandHandler("reply", reply_to_user))
     # Обработчик для кнопки "Завершить этот чат" для админа
     application.add_handler(CallbackQueryHandler(admin_end_chat, pattern="^admin_end_chat_"))
-
-
     # Обработчик для неизвестных команд и сообщений, если пользователь не в ConversationHandler
     application.add_handler(MessageHandler(filters.COMMAND, unknown))
     # Этот обработчик должен быть ПОСЛЕДНИМ, чтобы не перехватывать сообщения для ConversationHandler
