@@ -1,9 +1,11 @@
 ﻿import logging
 import json
 import os
+from dotenv import load_dotenv; load_dotenv()
+load_dotenv()
 import datetime
 from uuid import uuid4
-from dotenv import load_dotenv; load_dotenv()
+
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from telegram.ext import (
