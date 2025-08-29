@@ -379,7 +379,7 @@ async def handle_user_message_in_chat(update: Update, context: ContextTypes.DEFA
         await context.bot.send_message(
             chat_id=ADMIN_CHAT_ID,
             text=f"💬 Сообщение от {user.mention_html()}: \n\n"
-                 f"_{message_text}_",
+                 f"{message_text}",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🚫 Завершить этот чат", callback_data=f"admin_end_chat_{user_id}")]])
         )
