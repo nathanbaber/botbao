@@ -586,10 +586,10 @@ def main() -> None:
     application.add_handler(CommandHandler("order", make_order_command))     # Добавляем новый обработчик
 
     application.add_handler(CommandHandler("menu", send_main_menu)) # Добавляем возможность прямого вызова меню
-    application.add_handler(CommandHandler("faq", send_main_menu)) # Добавляем возможность прямого вызова FAQ
-    application.add_handler(CommandHandler("review", send_main_menu))
-    application.add_handler(CommandHandler("problem", send_main_menu))
-    application.add_handler(CommandHandler("support", send_main_menu))
+    application.add_handler(CommandHandler("faq", show_faq_questions)) # Добавляем возможность прямого вызова FAQ
+    application.add_handler(CommandHandler("review", start_review))
+    application.add_handler(CommandHandler("problem", start_problem))
+    application.add_handler(CommandHandler("support", start_live_chat))
 
     # Обработчик кнопки "Назад в главное меню"
     application.add_handler(CallbackQueryHandler(send_main_menu, pattern="^start$"))
