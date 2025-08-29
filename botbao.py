@@ -27,7 +27,7 @@ ADMIN_CHAT_ID = int(os.getenv("ADMIN_CHAT_ID"))
            
 # --------------------------
 
-# Состояния для ConversationHandler (все должны быть уникальными)
+# Состояния для ConversationHandler
 (MENU_CATEGORY, MENU_ITEM,
  FAQ_QUESTION,
  REVIEW_TEXT,
@@ -524,6 +524,7 @@ async def start_reservation(update: Update, context) -> int:
     keyboard=[]
 
     # Создаем календарь
+    print(f"Type of LSTEP before calendar build: {type(LSTEP)}")
     calendar, step = DetailedTelegramCalendar(
         locale='ru',
         min_date=now.date(), # Нельзя выбрать прошедшую дату
@@ -532,7 +533,7 @@ async def start_reservation(update: Update, context) -> int:
     ).build()
 
     await query.edit_message_text("В какой день Вы планируете посетить наше бистро? Пожалуйста, выберите дату:",
-        reply_markup=calendar,
+        reply_markup=calendar
     )
 
     keyboard.append([InlineKeyboardButton("🔙 В главное меню", callback_data="start")])
