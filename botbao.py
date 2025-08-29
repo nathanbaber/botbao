@@ -521,20 +521,36 @@ def create_month_calendar(year, month):
     cal = calendar.Calendar()
     month_days = cal.monthdatescalendar(year, month)
     keyboard = []
+
+    # Устанавливаем min_date по умолчанию на сегодняшнюю дату, если не передана
+    if min_date is None:
+        min_date = datetime.now().date()
+
     # Заголовки дней недели
     keyboard.append([InlineKeyboardButton(day, callback_data="ignore") for day in ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]])
 
     for week in month_days:
         row = []
         for day_date in week:
-            if day_date.month == month:row.append(InlineKeyboardButton(str(day_date.day), callback_data=f"date_{day_date.isoformat()}"))
+            # Проверяем, относится ли день к текущему отображаемому месяцу
+            if day_date.month == month:
+                # Проверяем, является ли дата прошедшей (до min_date)
+                if day_date < min_date:
+                    # Прошедшие даты делаем неактивными и пустыми
+                    row.append(InlineKeyboardButton(" ", callback_data="ignore"))
+                else:
+                    # Допустимые даты
+                    row.append(InlineKeyboardButton(str(day_date.day), callback_data=f"date_{day_date.isoformat()}"))
             else:
+                # Даты из предыдущего/следующего месяца, отображаемые в сетке календаря
                 row.append(InlineKeyboardButton(" ", callback_data="ignore")) # Пустые клетки для других месяцев
-            keyboard.append(row)
+        keyboard.append(row) # <-- ИСПРАВЛЕНО: Добавляем строку (неделю) после того, как она полностью сформирована
 
         # Кнопки для навигации
+    first_day_of_current_month = date(year, month, 1)
     prev_month_date = (date(year, month, 1) - timedelta(days=1))
     next_month_date = (date(year, month, 1) + timedelta(days=31)).replace(day=1)
+
     keyboard.append([
         InlineKeyboardButton(f"<{prev_month_date.strftime('%B')}", callback_data=f"month_{prev_month_date.year}_{prev_month_date.month}"),
         InlineKeyboardButton(datetime(year, month, 1).strftime("%B %Y"), callback_data="ignore"),
@@ -564,7 +580,7 @@ async def start_reservation(update: Update, context) -> int:
     # ).build()
     #
 
-    calendar_markup = create_month_calendar(now.year, now.month)
+    calendar_markup = create_month_calendar(now.year, now.month, min_date=now.date())
 
     current_keyboard_rows = list(calendar_markup.inline_keyboard)
     current_keyboard_rows.append([InlineKeyboardButton("🔙 В главное меню", callback_data="start")])
@@ -586,6 +602,11 @@ async def calendar_callback_handler(update: Update, context) -> int:
     await query.answer()
     data = query.data
 
+     # Определяем сегодняшнюю дату для валидации min_date
+    now_date = datetime.now().date()
+    max_reserv_date = now_date + timedelta(days=30) # Ваш лимит в 30 дней
+    
+
     if data.startswith("date_"):
         # Пользователь выбрал конкретную дату
         selected_date_str = data.split("_")[1]
@@ -595,24 +616,27 @@ async def calendar_callback_handler(update: Update, context) -> int:
         now_date = datetime.now().date()
         max_reserv_date = now_date + timedelta(days=30) # Ваш лимит в 30 дней
         
-        if selected_date < now_date or selected_date > max_reserv_date:
-            # Создаем календарь для текущего месяца, чтобы пользователь мог выбрать снова
-            new_calendar_markup = create_month_calendar(now_date.year, now_date.month)
-
-            current_keyboard_rows = list(new_calendar_markup.inline_keyboard) # Преобразуем в список
-            current_keyboard_rows.append([InlineKeyboardButton("🔙 В главное меню", callback_data="start")])
-            final_markup = InlineKeyboardMarkup(current_keyboard_rows)
-
-            await query.edit_message_text(
-                "Выбрана недопустимая дата. Пожалуйста, выберите дату в пределах ближайших 30 дней, не раньше сегодняшнего дня.",
-                reply_markup=final_markup
-            )
-            return ASK_DATE
+        if data.startswith("date_"):
+            selected_date_str = data.split("_")[1]
+            selected_date = date.fromisoformat(selected_date_str)
         
-        context.user_data['reservation_data']['selected_date'] = selected_date
-        await query.edit_message_text(f"Вы выбрали: {selected_date.strftime('%d.%m.%Y')}. Теперь выберите время.")
+            if selected_date < now_date or selected_date > max_reserv_date:
+                # Создаем календарь для текущего месяца с корректной min_date
+                new_calendar_markup = create_month_calendar(now_date.year, now_date.month, min_date=now_date)
+                current_keyboard_rows = list(new_calendar_markup.inline_keyboard)
+                current_keyboard_rows.append([InlineKeyboardButton("🔙 В главное меню", callback_data="start")])
+                final_markup = InlineKeyboardMarkup(current_keyboard_rows)
+
+                await query.edit_message_text(
+                    "Выбрана недопустимая дата. Пожалуйста, выберите дату в пределах ближайших 30 дней, не раньше сегодняшнего дня.",
+                    reply_markup=final_markup
+                )
+                return ASK_DATE
+        
+            context.user_data['reservation_data']['selected_date'] = selected_date
+            await query.edit_message_text(f"Вы выбрали: {selected_date.strftime('%d.%m.%Y')}. Теперь выберите время.")
         # Переход к следующему состоянию, например, ASK_TIME
-        return ASK_TIME # Предполагается, что ASK_TIME — это другое состояние
+            return ASK_TIME # Предполагается, что ASK_TIME — это другое состояние
 
     elif data.startswith("month_"):
         # Пользователь нажал на кнопку навигации по месяцам (предыдущий/следующий месяц)
