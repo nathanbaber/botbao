@@ -517,7 +517,7 @@ async def get_date(update: Update, context):
     text = update.message.text
     reservation_data = context.user_data['reservation_data']
     today = datetime.now().date()
-    tomorrow = today + datetime.timedelta(days=1)
+    tomorrow = today + timedelta(days=1)
     selected_date = None
 
     if text.lower() == "отмена":
