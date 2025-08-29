@@ -267,7 +267,7 @@ async def process_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     await update.message.reply_text(
        "Спасибо за Ваш отзыв! Мы стараемся для Вас!",
-       reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="menu")]])
+       reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="send_main_menu")]])
     )
     # Уведомляем админов
     await context.bot.send_message(
