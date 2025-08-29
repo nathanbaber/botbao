@@ -654,11 +654,13 @@ async def process_time_selection(update: Update, context):
 
     reservation_data['time'] = selected_time
     logger.info(f"Время бронирования выбрано: {selected_time}")
+    await query.delete_message()
 
-    await query.edit_message_text(
-        f"Время: {selected_time.strftime('%H:%M')}.\n"
-        "На сколько человек бронируем стол? (например, 4)",
-        reply_markup=ReplyKeyboardMarkup([["Отмена"]], one_time_keyboard=True, resize_keyboard=True)
+    await context.bot.send_message(
+        chat_id=query.message.chat_id,
+            text=f"Выбрано время: {selected_time.strftime('%H:%M')}.\n"
+                "На сколько человек бронируем стол? (например, 4)",
+            reply_markup=ReplyKeyboardMarkup([["Отмена"]], one_time_keyboard=True, resize_keyboard=True)
     )
     return ASK_GUESTS
 
