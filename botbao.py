@@ -1,4 +1,5 @@
-﻿import logging
+﻿from calendar import calendar
+import logging
 import json
 import os
 import re
@@ -516,29 +517,135 @@ async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_main_menu(update, context)
 
 
+def create_month_calendar(year, month):
+    cal = calendar.Calendar()
+    month_days = cal.monthdatescalendar(year, month)
+    keyboard = []
+    # Заголовки дней недели
+    keyboard.append([InlineKeyboardButton(day, callback_data="ignore") for day in ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]])
+
+    for week in month_days:
+        row = []
+        for day_date in week:
+            if day_date.month == month:row.append(InlineKeyboardButton(str(day_date.day), callback_data=f"date_{day_date.isoformat()}"))
+            else:
+                row.append(InlineKeyboardButton(" ", callback_data="ignore")) # Пустые клетки для других месяцев
+            keyboard.append(row)
+
+        # Кнопки для навигации
+    prev_month_date = (date(year, month, 1) - timedelta(days=1))
+    next_month_date = (date(year, month, 1) + timedelta(days=31)).replace(day=1)
+    keyboard.append([
+        InlineKeyboardButton(f"<{prev_month_date.strftime('%B')}", callback_data=f"month_{prev_month_date.year}_{prev_month_date.month}"),
+        InlineKeyboardButton(datetime(year, month, 1).strftime("%B %Y"), callback_data="ignore"),
+        InlineKeyboardButton(f"{next_month_date.strftime('%B')}>", callback_data=f"month_{next_month_date.year}_{next_month_date.month}")
+    ])
+    return InlineKeyboardMarkup(keyboard)    
+
+
 # Функция бронирование
 async def start_reservation(update: Update, context) -> int:
     query = update.callback_query
+    if query:
+        await query.answer() # Подтверждаем обратный вызов (callback_query)
+        # Если это обратный вызов, мы редактируем сообщение
+        message_editor = query.edit_message_text
+    else:
+        # Если это команда (например, /reserve), мы отвечаем на сообщение
+        message_editor = update.message.reply_text
     context.user_data['reservation_data'] = {} # Инициализация данных для бронирования
     now = datetime.now()
     keyboard=[]
 
-    # Создаем календарь
-    print(f"Type of LSTEP before calendar build: {type(LSTEP)}")
-    calendar, step = DetailedTelegramCalendar(
-        locale='ru',
-        min_date=now.date(), # Нельзя выбрать прошедшую дату
-        max_date=now.date() + timedelta(days=30), # Максимум на 1 месяц вперед
-        current_step=LSTEP.MONTH
-    ).build()
+    # # Создаем календарь
+    # calendar, step = DetailedTelegramCalendar(
+    #     locale='ru',
+    #     min_date=now.date(), # Нельзя выбрать прошедшую дату
+    #     max_date=now.date() + timedelta(days=30), # Максимум на 1 месяц вперед
+    # ).build()
 
-    await query.edit_message_text("В какой день Вы планируете посетить наше бистро? Пожалуйста, выберите дату:",
-        reply_markup=calendar
+    calendar_markup = create_month_calendar(now.year, now.month)
+    current_keyboard_rows = calendar_markup.inline_keyboard
+    current_keyboard_rows.append([InlineKeyboardButton("🔙 В главное меню", callback_data="start")])
+    final_markup = InlineKeyboardMarkup(current_keyboard_rows)
+
+    await message_editor(
+        "В какой день Вы планируете посетить наше бистро? Пожалуйста, выберите дату:",
+        reply_markup=final_markup
     )
 
-    keyboard.append([InlineKeyboardButton("🔙 В главное меню", callback_data="start")])
+    # await query.edit_message_text("В какой день Вы планируете посетить наше бистро? Пожалуйста, выберите дату:",
+    #     reply_markup=calendar
+    # )
 
     return ASK_DATE
+
+async def calendar_callback_handler(update: Update, context) -> int:
+    query = update.callback_query
+    await query.answer()
+    data = query.data
+
+    if data.startswith("date_"):
+        # Пользователь выбрал конкретную дату
+        selected_date_str = data.split("_")[1]
+        selected_date = date.fromisoformat(selected_date_str)
+        
+        # Добавляем проверку min_date/max_date, как это было в DetailedTelegramCalendar
+        now_date = datetime.now().date()
+        max_reserv_date = now_date + timedelta(days=30) # Ваш лимит в 30 дней
+        
+        if selected_date < now_date or selected_date > max_reserv_date:
+            # Создаем календарь для текущего месяца, чтобы пользователь мог выбрать снова
+            new_calendar_markup = create_month_calendar(now_date.year, now_date.month)
+            current_keyboard_rows = new_calendar_markup.inline_keyboard
+            current_keyboard_rows.append([InlineKeyboardButton("🔙 В главное меню", callback_data="start")])
+            final_markup = InlineKeyboardMarkup(current_keyboard_rows)
+
+            await query.edit_message_text(
+                "Выбрана недопустимая дата. Пожалуйста, выберите дату в пределах ближайших 30 дней, не раньше сегодняшнего дня.",
+                reply_markup=final_markup
+            )
+            return ASK_DATE
+        
+        context.user_data['reservation_data']['selected_date'] = selected_date
+        await query.edit_message_text(f"Вы выбрали: {selected_date.strftime('%d.%m.%Y')}. Теперь выберите время.")
+        # Переход к следующему состоянию, например, ASK_TIME
+        return ASK_TIME # Предполагается, что ASK_TIME — это другое состояние
+
+    elif data.startswith("month_"):
+        # Пользователь нажал на кнопку навигации по месяцам (предыдущий/следующий месяц)
+        parts = data.split("_")
+        target_year = int(parts[1])
+        target_month = int(parts[2])
+        
+        # Генерируем календарь для нового месяца
+        new_calendar_markup = create_month_calendar(target_year, target_month)
+        
+        # Снова добавляем кнопку "Назад в главное меню"
+        current_keyboard_rows = new_calendar_markup.inline_keyboard
+        current_keyboard_rows.append([InlineKeyboardButton("🔙 В главное меню", callback_data="start")])
+        final_markup = InlineKeyboardMarkup(current_keyboard_rows)
+        
+        await query.edit_message_text(
+            "В какой день Вы планируете посетить наше бистро? Пожалуйста, выберите дату:",
+            reply_markup=final_markup
+        )
+        return ASK_DATE
+    
+    elif data == "ignore":
+        # Ничего не делаем для кнопок "ignore" (заголовки дней недели, пустые ячейки, метка текущего месяца)
+        pass 
+    elif data == "start":
+        # Обрабатываем "Назад в главное меню"
+        # Вероятно, вы захотите отправить главное меню и завершить разговор здесь
+        await query.edit_message_text("Возвращаемся в главное меню.")
+        # Пример: await send_main_menu(update, context) # Вызов вашей функции главного меню
+        # from telegram.ext import ConversationHandler # Раскомментируйте, если используете ConversationHandler
+        return ConversationHandler.END # Предполагается, что вы завершаете ConversationHandler
+
+    return ASK_DATE # Остаемся в состоянии ASK_DATE, если конкретное действие не было предпринято
+
+
 
 # Хендлер для обработки выбора даты из календаря
 async def process_date_selection(update: Update, context) -> int:
@@ -948,7 +1055,7 @@ def main() -> None:
                       CommandHandler("reserve", start_reservation)
         ],
         states={
-            ASK_DATE: [CallbackQueryHandler(process_date_selection)], # Календарь
+            ASK_DATE: [CallbackQueryHandler(calendar_callback_handler, pattern="^(date_|month_|start|ignore)")], # Календарь
             ASK_TIME:  [CallbackQueryHandler(process_time_selection, pattern="^time_.*|cancel_reserve$")], # Выбор времени и отмена
             ASK_GUESTS: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_guests)],
             ASK_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_name)],
