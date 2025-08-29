@@ -491,6 +491,21 @@ async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Извините, я не понял эту команду. Пожалуйста, используйте кнопки или /help.")
     await send_main_menu(update, context)
 
+
+async def reserve_table_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработчик команды /reserve."""
+    await update.message.reply_text(
+        "Извините, функция бронирования столика пока находится в разработке. Пожалуйста, позвоните нам по номеру +7 (918) 582-31-51 для бронирования. Вернуться в главное меню: /start",
+        reply_markup=get_main_keyboard()
+    )
+
+async def make_order_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Обработчик команды /order."""
+    await update.message.reply_text("Функция онлайн-заказа пока не доступна.Вы можете просмотреть наше меню, а для заказа свяжитесь с нами напрямую по телефону +7 (918) 582-31-51. Вернуться в главное меню: /start",
+        reply_markup=get_main_keyboard()
+    )
+
+
 # --- Главная функция бота ---
 
 def main() -> None:
@@ -562,6 +577,14 @@ def main() -> None:
     # Основные команды
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
+
+    # Команды из BotFather:
+    application.add_handler(CommandHandler("menu", send_main_menu)) # Теперь /menu сразу ведет к категориям
+    application.add_handler(CommandHandler("review", start_review))       # Теперь /review сразу начинает отзыв
+    # Новые команды, для которых пока нет полной реализации
+    application.add_handler(CommandHandler("reserve", reserve_table_command)) # Добавляем новый обработчик
+    application.add_handler(CommandHandler("order", make_order_command))     # Добавляем новый обработчик
+
     application.add_handler(CommandHandler("menu", send_main_menu)) # Добавляем возможность прямого вызова меню
     application.add_handler(CommandHandler("faq", send_main_menu)) # Добавляем возможность прямого вызова FAQ
     application.add_handler(CommandHandler("review", send_main_menu))
