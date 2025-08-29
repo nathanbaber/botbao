@@ -821,6 +821,13 @@ async def make_order_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         reply_markup=get_main_keyboard()
     )
 
+async def book_table(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    user_id = update.effective_user.id
+    logger.info(f"Пользователь {user_id} нажал 'Забронировать стол'.")
+    # Здесь начнется логика бронирования
+    await update.message.reply_text("Отлично! Для бронирования стола мне потребуется несколько деталей. Пожалуйста, выберите дату:")
+    return ASK_DATE
+    
 
 # --- Главная функция бота ---
 
