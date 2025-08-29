@@ -514,14 +514,12 @@ async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Функция бронирование
 async def start_reservation(update: Update, context) -> int:
-    query = update.callback_query
-    if query:
-        await query.answer() # Отвечаем на callback, чтобы убрать индикатор загрузки
-        # Используем query.message для отправки нового сообщения или редактирования текущего
-        target_message = query.message
-    else:
-        # Если функция вызвана не через callback (например, через команду), используем update.message
-        target_message = update.message
+    if update.callback_query: # Если вызвано из Inline кнопки
+            await update.callback_query.answer()
+            message_to_send = update.callback_query.message
+    else: # Если вызвано из команды
+        message_to_send = update.message
+
     context.user_data['reservation_data'] = {} # Инициализация данных для бронирования
     now = datetime.now()
 
@@ -532,7 +530,7 @@ async def start_reservation(update: Update, context) -> int:
         max_date=now.date() + timedelta(days=30) # Максимум на 1 месяц вперед
     ).build()
 
-    await target_message.reply_text(
+    await message_to_send.reply_text(
         "В какой день Вы планируете посетить наше бистро? Пожалуйста, выберите дату:",
         reply_markup=calendar
     )
@@ -571,7 +569,7 @@ async def process_date_selection(update: Update, context) -> int:
             calendar, step = DetailedTelegramCalendar(
                 locale='ru',
                 min_date=today,
-                max_date=today + timedelta(days=90)
+                max_date=today + timedelta(days=30)
             ).build()
             await query.message.reply_text("Пожалуйста, выберите корректную дату:", reply_markup=calendar)
             return ASK_DATE
@@ -970,7 +968,7 @@ def main() -> None:
     application.add_handler(CommandHandler("review", review_conversation))
     application.add_handler(CommandHandler("order", make_order_command))     # Добавляем новый обработчик
     application.add_handler(CommandHandler("reserve", start_reservation))
-   # application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("help", help_command))
 
     # Обработчик кнопки "Назад в главное меню"
     application.add_handler(CallbackQueryHandler(send_main_menu, pattern="^start$"))
