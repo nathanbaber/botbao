@@ -250,9 +250,6 @@ async def start_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
         logger.error("start_review вызван без update.message или update.callback_query")
         return ConversationHandler.END # Завершаем, если не удалось определить, куда отвечать
     
-    keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data="menu")]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
     return REVIEW_TEXT
 
 async def process_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -270,7 +267,7 @@ async def process_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     await update.message.reply_text(
        "Спасибо за Ваш отзыв! Мы стараемся для Вас!",
-       reply_markup=get_main_keyboard()
+       reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="menu")]])
     )
     # Уведомляем админов
     await context.bot.send_message(
