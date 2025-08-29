@@ -515,18 +515,6 @@ async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Функция бронирование
 async def start_reservation(update: Update, context) -> int:
     query = update.callback_query
-    if update.callback_query: # Если вызвано из Inline кнопки
-            await update.callback_query.answer()
-            message_to_send = update.callback_query.message
-            await query.edit_message_text(
-            reply_markup=ReplyKeyboardRemove()
-        )
-    else: # Если вызвано из команды
-        message_to_send = update.message
-        await update.message.reply_text(
-            reply_markup=ReplyKeyboardRemove()
-    )
-
     context.user_data['reservation_data'] = {} # Инициализация данных для бронирования
     now = datetime.now()
 
