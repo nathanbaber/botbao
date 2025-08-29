@@ -241,17 +241,16 @@ async def start_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     if query:
         await query.answer()
         await query.edit_message_text("Пожалуйста, напишите Ваш отзыв. Он очень важен для нас!",
-        reply_markup=None # Убираем инлайн-клавиатуру
+        reply_markup=get_main_keyboard()
         )
     elif target_message: # Если команда вызвана напрямую
         await target_message.reply_text(
             "Пожалуйста, напишите Ваш отзыв. Он очень важен для нас!",
-            reply_markup=ReplyKeyboardRemove() # Убираем инлайн-клавиатуру
+            reply_markup=get_main_keyboard()
         )
     else:
         logger.error("start_review вызван без update.message или update.callback_query")
         return ConversationHandler.END # Завершаем, если не удалось определить, куда отвечать
-    keyboard.append([InlineKeyboardButton("🔙 В главное меню", callback_data="start")])
     return REVIEW_TEXT
 
 async def process_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -269,7 +268,7 @@ async def process_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     await update.message.reply_text(
        "Спасибо за Ваш отзыв! Мы стараемся для Вас!",
-       reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="start")]])
+       reply_markup=get_main_keyboard()
     )
     # Уведомляем админов
     await context.bot.send_message(
@@ -304,13 +303,13 @@ async def start_problem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         await query.edit_message_text(
             "Опишите, пожалуйста, Вашу проблему как можно подробнее. "
             "Это поможет нам быстрее ее решить.",
-            reply_markup=None
+            reply_markup=get_main_keyboard()
         )
     elif target_message:
         await target_message.reply_text(
             "Опишите, пожалуйста, Вашу проблему как можно подробнее. "
             "Это поможет нам быстрее ее решить.",
-            reply_markup=ReplyKeyboardRemove()
+            reply_markup=get_main_keyboard()
         )
     else:
         logger.error("start_problem вызван без update.message или update.callback_query")
