@@ -44,6 +44,13 @@ PROBLEMS_FILE = os.path.join(DATA_DIR, 'problems.json')
 USER_STATES_FILE = os.path.join(DATA_DIR, 'user_states.json')
 
 menu_data = {} # Глобальная переменная для хранения данных меню
+reviews_data = []
+try:
+    with open(REVIEWS_FILE, 'r', encoding='utf-8') as f:
+        reviews_data = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError):
+    reviews_data = []
+    logger.info("Файл отзывов не найден или пуст, инициализирована новая структура.")
 
 # Убедимся, что директория data существует
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -95,7 +102,7 @@ def get_main_keyboard():
         [InlineKeyboardButton("🍽️ Меню", callback_data="menu")],
         [InlineKeyboardButton("❓ Вопросы", callback_data="faq")],
         [InlineKeyboardButton("📝 Забронировать стол", callback_data="start_reservation")],
-        [InlineKeyboardButton("✍️ Оставить отзыв", callback_data="review")],
+        [InlineKeyboardButton("✍️ Оставить отзыв", callback_data="start_review")],
         [InlineKeyboardButton("⚠️ Сообщить о проблеме", callback_data="problem")],
         [InlineKeyboardButton("🗣️ Связаться со службой заботы", callback_data="support")]
     ]
@@ -222,30 +229,32 @@ async def show_faq_answer(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     )
     return FAQ_QUESTION
 
-# --- Функции Отзывов ---
+    # --- Функции Отзывов ---
 
-async def start_review(update: Update, context:
-ContextTypes.DEFAULT_TYPE) -> int:
+async def start_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Начинает процесс сбора отзыва."""
     query = update.callback_query
+    # Унифицируем, через что отправлять сообщение/редактировать
+    target_message = query.message if query else update.message
     if query:
         await query.answer()
-        await query.edit_message_text(
+        await query.edit_message_text("Пожалуйста, напишите Ваш отзыв. Он очень важен для нас!",
+        reply_markup=None # Убираем инлайн-клавиатуру
+        )
+    elif target_message: # Если команда вызвана напрямую
+        await target_message.reply_text(
             "Пожалуйста, напишите Ваш отзыв. Он очень важен для нас!",
             reply_markup=ReplyKeyboardRemove() # Убираем инлайн-клавиатуру
         )
-    else: # Если команда вызвана напрямую
-        await update.message.reply_text(
-            "Пожалуйста, напишите Ваш отзыв. Он очень важен для нас!",
-            reply_markup=ReplyKeyboardRemove() # Убираем инлайн-клавиатуру
-        )
+    else:
+        logger.error("start_review вызван без update.message или update.callback_query")
+        return ConversationHandler.END # Завершаем, если не удалось определить, куда отвечать
     return REVIEW_TEXT
 
 async def process_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Обрабатывает полученный отзыв."""
     user = update.effective_user
     review_text = update.message.text
-
     review_entry = {
         "user_id": user.id,
         "username": user.username if user.username else user.full_name,
@@ -256,15 +265,15 @@ async def process_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     save_data(REVIEWS_FILE, reviews_data)
 
     await update.message.reply_text(
-        "Спасибо за Ваш отзыв! Мы стараемся для Вас!",
-        reply_markup=get_main_keyboard()
+       "Спасибо за Ваш отзыв! Мы стараемся для Вас!",
+       reply_markup=get_main_keyboard()
     )
     # Уведомляем админов
     await context.bot.send_message(
         chat_id=ADMIN_CHAT_ID,
         text=f"📢 НОВЫЙ ОТЗЫВ ОТ ГОСТЯ: \n\n"
-             f"От: {user.mention_html()} (ID: {user.id} )\n"
-             f"Отзыв: _{review_text}_",
+            f"От: {user.mention_html()} (ID: {user.id} )\n"
+            f"Отзыв: _{review_text}_",
         parse_mode="HTML"
     )
     return ConversationHandler.END
@@ -275,7 +284,9 @@ async def cancel_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE
         "Действие отменено.",
         reply_markup=get_main_keyboard()
     )
+    context.user_data.pop('review_data', None)
     return ConversationHandler.END
+
 
 # --- Функции Проблем ---
 
@@ -533,7 +544,7 @@ async def process_date_selection(update: Update, context) -> int:
     result, key, step = DetailedTelegramCalendar(
         locale='ru',
         min_date=now.date(),
-        max_date=now.date() + timedelta(days=90)
+        max_date=now.date() + timedelta(days=30)
     ).process(query.data)
 
     if not result and key: # Пользователь еще выбирает месяц/год/день
@@ -873,16 +884,19 @@ def main() -> None:
     application.add_handler(faq_conv_handler)
 
     # ConversationHandler для отзывов
-    review_conv_handler = ConversationHandler(
-        entry_points=[CallbackQueryHandler(start_review, pattern="^review$")],
+    review_conversation = ConversationHandler(
+        entry_points=[CallbackQueryHandler(start_review, pattern="^start_review$"),
+                      CommandHandler("review", start_review)],
         states={
             REVIEW_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_review)],
         },
         fallbacks=[CommandHandler("cancel", cancel_conversation),
+                   MessageHandler(filters.TEXT & ~filters.COMMAND, cancel_conversation),
                    CallbackQueryHandler(send_main_menu, pattern="^start$"),
-                   CommandHandler("start", start)]
+                   CommandHandler("start", start)],
+        allow_reentry=True
     )
-    application.add_handler(review_conv_handler)
+    application.add_handler(review_conversation)
 
     # ConversationHandler для проблем
     problem_conv_handler = ConversationHandler(
@@ -934,17 +948,17 @@ def main() -> None:
         per_user=True,
         allow_reentry=True, # Позволяет пользователю начать новый разговор, даже если предыдущий не был завершен
     )
+    application.add_handler(reservation_conversation)
 
     # Основные команды
     application.add_handler(CommandHandler("start", start))
 
     # Команды из BotFather:
     application.add_handler(CommandHandler("menu", send_main_menu)) # Теперь /menu сразу ведет к категориям
-    application.add_handler(CommandHandler("review", start_review))       # Теперь /review сразу начинает отзыв
+    application.add_handler(CommandHandler("review", review_conversation))
     application.add_handler(CommandHandler("order", make_order_command))     # Добавляем новый обработчик
     application.add_handler(CommandHandler("reserve", start_reservation))
     application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(reservation_conversation)
 
     # Обработчик кнопки "Назад в главное меню"
     application.add_handler(CallbackQueryHandler(send_main_menu, pattern="^start$"))
