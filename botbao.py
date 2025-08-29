@@ -529,7 +529,8 @@ async def start_reservation(update: Update, context) -> int:
     ).build()
 
     await query.edit_message_text("В какой день Вы планируете посетить наше бистро? Пожалуйста, выберите дату:",
-        reply_markup=calendar
+        reply_markup=calendar,
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 В главное меню", callback_data="start")]])
     )
     return ASK_DATE
 
