@@ -45,6 +45,7 @@ USER_STATES_FILE = os.path.join(DATA_DIR, 'user_states.json')
 
 menu_data = {} # Глобальная переменная для хранения данных меню
 reviews_data = []
+
 try:
     with open(REVIEWS_FILE, 'r', encoding='utf-8') as f:
         reviews_data = json.load(f)
