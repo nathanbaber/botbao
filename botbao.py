@@ -906,7 +906,7 @@ def main() -> None:
 
     # ConversationHandler для бронирования столов
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("reserve", start_reservation),
+        entry_points=[CommandHandler(start_reservation, pattern= "^reserve&"),
                       CallbackQueryHandler(start_reservation, pattern="^reserve$") # Если бронирование начинается с кнопки
         ],
         states={
