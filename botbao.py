@@ -514,10 +514,12 @@ async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Функция бронирование
 async def start_reservation(update: Update, context) -> int:
+    user_id = update.effective_user.id 
     if update.callback_query: # Если вызвано из Inline кнопки
             await update.callback_query.answer()
             message_to_send = update.callback_query.message
             await context.bot.send_message(
+            chat_id=user_id,
             reply_markup=ReplyKeyboardRemove()
         )
     else: # Если вызвано из команды
@@ -537,6 +539,7 @@ async def start_reservation(update: Update, context) -> int:
     ).build()
 
     await context.bot.send_message(
+        chat_id=user_id,
         text="В какой день Вы планируете посетить наше бистро? Пожалуйста, выберите дату:",
         reply_markup=calendar
     )
