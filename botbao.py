@@ -121,6 +121,7 @@ async def send_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, mes
             text=message_text,
             reply_markup=get_main_keyboard()
         )
+    return ConversationHandler.END
 
 # ---Обработчики команд ---
 
@@ -970,6 +971,7 @@ def main() -> None:
 
     # Обработчик кнопки "Назад в главное меню"
     application.add_handler(CallbackQueryHandler(send_main_menu, pattern="^start$"))
+    application.add_handler(CallbackQueryHandler(send_main_menu, pattern="^menu$"))
     # Команда для админов, чтобы отвечать пользователям
     application.add_handler(CommandHandler("reply", reply_to_user))
     # Обработчик для кнопки "Завершить этот чат" для админа
