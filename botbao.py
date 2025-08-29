@@ -520,18 +520,22 @@ async def start_reservation(update: Update, context) -> int:
     query = update.callback_query
     context.user_data['reservation_data'] = {} # Инициализация данных для бронирования
     now = datetime.now()
+    keyboard=[]
 
     # Создаем календарь
     calendar, step = DetailedTelegramCalendar(
         locale='ru',
         min_date=now.date(), # Нельзя выбрать прошедшую дату
-        max_date=now.date() + timedelta(days=30) # Максимум на 1 месяц вперед
+        max_date=now.date() + timedelta(days=30), # Максимум на 1 месяц вперед
+        current_step=LSTEP.MONTH
     ).build()
 
     await query.edit_message_text("В какой день Вы планируете посетить наше бистро? Пожалуйста, выберите дату:",
         reply_markup=calendar,
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 В главное меню", callback_data="start")]])
     )
+
+    keyboard.append([InlineKeyboardButton("🔙 В главное меню", callback_data="start")])
+
     return ASK_DATE
 
 # Хендлер для обработки выбора даты из календаря
