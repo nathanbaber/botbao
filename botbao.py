@@ -1,4 +1,4 @@
-﻿from calendar import calendar
+﻿import calendar
 import logging
 import json
 import os
@@ -555,16 +555,17 @@ async def start_reservation(update: Update, context) -> int:
         message_editor = update.message.reply_text
     context.user_data['reservation_data'] = {} # Инициализация данных для бронирования
     now = datetime.now()
-    keyboard=[]
 
-    # # Создаем календарь
+    #  Создаем календарь
     # calendar, step = DetailedTelegramCalendar(
     #     locale='ru',
     #     min_date=now.date(), # Нельзя выбрать прошедшую дату
     #     max_date=now.date() + timedelta(days=30), # Максимум на 1 месяц вперед
     # ).build()
+    #
 
     calendar_markup = create_month_calendar(now.year, now.month)
+
     current_keyboard_rows = calendar_markup.inline_keyboard
     current_keyboard_rows.append([InlineKeyboardButton("🔙 В главное меню", callback_data="start")])
     final_markup = InlineKeyboardMarkup(current_keyboard_rows)
