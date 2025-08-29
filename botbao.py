@@ -94,7 +94,7 @@ def get_main_keyboard():
     keyboard = [
         [InlineKeyboardButton("🍽️ Меню", callback_data="menu")],
         [InlineKeyboardButton("❓ Вопросы", callback_data="faq")],
-        [InlineKeyboardButton("📝 Забронировать стол", callback_data="reserve")],
+        [InlineKeyboardButton("📝 Забронировать стол", callback_data="start_reservation")],
         [InlineKeyboardButton("✍️ Оставить отзыв", callback_data="review")],
         [InlineKeyboardButton("⚠️ Сообщить о проблеме", callback_data="problem")],
         [InlineKeyboardButton("🗣️ Связаться со службой заботы", callback_data="support")]
@@ -497,8 +497,16 @@ async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_main_menu(update, context)
 
 
-# Функция, запускающая бронирование, которая теперь отображает календарь
-async def start_reservation(update: Update, context):
+# Функция бронирование
+async def start_reservation(update: Update, context) -> int:
+    query = update.callback_query
+    if query:
+        await query.answer() # Отвечаем на callback, чтобы убрать индикатор загрузки
+        # Используем query.message для отправки нового сообщения или редактирования текущего
+        target_message = query.message
+    else:
+        # Если функция вызвана не через callback (например, через команду), используем update.message
+        target_message = update.message
     context.user_data['reservation_data'] = {} # Инициализация данных для бронирования
     now = datetime.now()
 
@@ -506,7 +514,7 @@ async def start_reservation(update: Update, context):
     calendar, step = DetailedTelegramCalendar(
         locale='ru',
         min_date=now.date(), # Нельзя выбрать прошедшую дату
-        max_date=now.date() + timedelta(days=90) # Максимум на 3 месяца вперед
+        max_date=now.date() + timedelta(days=30) # Максимум на 1 месяц вперед
     ).build()
 
     await update.message.reply_text(
@@ -516,10 +524,9 @@ async def start_reservation(update: Update, context):
     return ASK_DATE
 
 # Хендлер для обработки выбора даты из календаря
-async def process_date_selection(update: Update, context):
+async def process_date_selection(update: Update, context) -> int:
     query = update.callback_query
-    await query.answer() # Обязательно ответить на CallbackQuery
-
+    await query.answer() 
     now = datetime.now()
 
     # Обрабатываем клики по календарю
@@ -905,9 +912,9 @@ def main() -> None:
     application.add_handler(live_chat_conv_handler)
 
     # ConversationHandler для бронирования столов
-    conv_handler = ConversationHandler(
-        entry_points=[CommandHandler(start_reservation, pattern= "^reserve&"),
-                      CallbackQueryHandler(start_reservation, pattern="^reserve$") # Если бронирование начинается с кнопки
+    reservation_conversation = ConversationHandler(
+        entry_points=[CallbackQueryHandler(start_reservation, pattern="^start_reservation$"), # Если бронирование начинается с кнопки
+                      CommandHandler("reserve", start_reservation)
         ],
         states={
             ASK_DATE: [CallbackQueryHandler(process_date_selection)], # Календарь
@@ -930,16 +937,14 @@ def main() -> None:
 
     # Основные команды
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
 
     # Команды из BotFather:
     application.add_handler(CommandHandler("menu", send_main_menu)) # Теперь /menu сразу ведет к категориям
     application.add_handler(CommandHandler("review", start_review))       # Теперь /review сразу начинает отзыв
     application.add_handler(CommandHandler("order", make_order_command))     # Добавляем новый обработчик
-    application.add_handler(CommandHandler("faq", show_faq_questions)) # Добавляем возможность прямого вызова FAQ
-    application.add_handler(CommandHandler("problem", start_problem))
-    application.add_handler(CommandHandler("support", start_live_chat))
     application.add_handler(CommandHandler("reserve", start_reservation))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(reservation_conversation)
 
     # Обработчик кнопки "Назад в главное меню"
     application.add_handler(CallbackQueryHandler(send_main_menu, pattern="^start$"))
