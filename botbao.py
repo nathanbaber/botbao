@@ -235,6 +235,7 @@ async def show_faq_answer(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 async def start_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Начинает процесс сбора отзыва."""
     query = update.callback_query
+    keyboard=[]
     # Унифицируем, через что отправлять сообщение/редактировать
     target_message = query.message if query else update.message
     if query:
@@ -250,7 +251,7 @@ async def start_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     else:
         logger.error("start_review вызван без update.message или update.callback_query")
         return ConversationHandler.END # Завершаем, если не удалось определить, куда отвечать
-    
+    keyboard.append([InlineKeyboardButton("🔙 В главное меню", callback_data="start")])
     return REVIEW_TEXT
 
 async def process_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -268,7 +269,7 @@ async def process_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     await update.message.reply_text(
        "Спасибо за Ваш отзыв! Мы стараемся для Вас!",
-       reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="send_main_menu")]])
+       reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Назад", callback_data="start")]])
     )
     # Уведомляем админов
     await context.bot.send_message(
@@ -294,6 +295,7 @@ async def cancel_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 async def start_problem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Начинает процесс сбора описания проблемы."""
+    keyboard=[]
     query = update.callback_query
     target_message = query.message if query else update.message
 
@@ -312,6 +314,7 @@ async def start_problem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         )
     else:
         logger.error("start_problem вызван без update.message или update.callback_query")
+    keyboard.append([InlineKeyboardButton("🔙 В главное меню", callback_data="start")])
     return PROBLEM_TEXT
 
 async def process_problem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -971,7 +974,6 @@ def main() -> None:
 
     # Обработчик кнопки "Назад в главное меню"
     application.add_handler(CallbackQueryHandler(send_main_menu, pattern="^start$"))
-    application.add_handler(CallbackQueryHandler(send_main_menu, pattern="^menu$"))
     # Команда для админов, чтобы отвечать пользователям
     application.add_handler(CommandHandler("reply", reply_to_user))
     # Обработчик для кнопки "Завершить этот чат" для админа
