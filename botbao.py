@@ -517,8 +517,14 @@ async def start_reservation(update: Update, context) -> int:
     if update.callback_query: # Если вызвано из Inline кнопки
             await update.callback_query.answer()
             message_to_send = update.callback_query.message
+            await context.bot.send_message(
+            reply_markup=ReplyKeyboardRemove()
+        )
     else: # Если вызвано из команды
         message_to_send = update.message
+        await update.message.reply_text(
+            reply_markup=ReplyKeyboardRemove()
+    )
 
     context.user_data['reservation_data'] = {} # Инициализация данных для бронирования
     now = datetime.now()
@@ -530,8 +536,8 @@ async def start_reservation(update: Update, context) -> int:
         max_date=now.date() + timedelta(days=30) # Максимум на 1 месяц вперед
     ).build()
 
-    await message_to_send.reply_text(
-        "В какой день Вы планируете посетить наше бистро? Пожалуйста, выберите дату:",
+    await context.bot.send_message(
+        text="В какой день Вы планируете посетить наше бистро? Пожалуйста, выберите дату:",
         reply_markup=calendar
     )
     return ASK_DATE
