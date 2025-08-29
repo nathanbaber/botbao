@@ -103,7 +103,7 @@ def get_main_keyboard():
         [InlineKeyboardButton("❓ Вопросы", callback_data="faq")],
         [InlineKeyboardButton("📝 Забронировать стол", callback_data="start_reservation")],
         [InlineKeyboardButton("✍️ Оставить отзыв", callback_data="start_review")],
-        [InlineKeyboardButton("⚠️ Сообщить о проблеме", callback_data="problem")],
+        [InlineKeyboardButton("⚠️ Сообщить о проблеме", callback_data="start_problem")],
         [InlineKeyboardButton("🗣️ Связаться со службой заботы", callback_data="support")]
     ]
     return InlineKeyboardMarkup(keyboard)
@@ -273,7 +273,7 @@ async def process_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         chat_id=ADMIN_CHAT_ID,
         text=f"📢 НОВЫЙ ОТЗЫВ ОТ ГОСТЯ: \n\n"
             f"От: {user.mention_html()} (ID: {user.id} )\n"
-            f"Отзыв: _{review_text}_",
+            f"Отзыв: {review_text}",
         parse_mode="HTML"
     )
     return ConversationHandler.END
@@ -293,19 +293,23 @@ async def cancel_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def start_problem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Начинает процесс сбора описания проблемы."""
     query = update.callback_query
+    target_message = query.message if query else update.message
+
     if query:
         await query.answer()
         await query.edit_message_text(
             "Опишите, пожалуйста, Вашу проблему как можно подробнее. "
             "Это поможет нам быстрее ее решить.",
-            reply_markup=ReplyKeyboardRemove()
+            reply_markup=None
         )
-    else:
-        await update.message.reply_text(
+    elif target_message:
+        await target_message.reply_text(
             "Опишите, пожалуйста, Вашу проблему как можно подробнее. "
             "Это поможет нам быстрее ее решить.",
             reply_markup=ReplyKeyboardRemove()
         )
+    else:
+        logger.error("start_problem вызван без update.message или update.callback_query")
     return PROBLEM_TEXT
 
 async def process_problem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -331,7 +335,7 @@ async def process_problem(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         chat_id=ADMIN_CHAT_ID,
         text=f"🚨 НОВАЯ ПРОБЛЕМА ОТ ГОСТЯ: \n\n"
              f"От: {user.mention_html()} (ID: {user.id})\n"
-             f"Проблема: _{problem_text}_",
+             f"Проблема: {problem_text}",
         parse_mode="HTML"
     )
     return ConversationHandler.END
@@ -899,16 +903,18 @@ def main() -> None:
     application.add_handler(review_conversation)
 
     # ConversationHandler для проблем
-    problem_conv_handler = ConversationHandler(
-        entry_points=[CallbackQueryHandler(start_problem, pattern="^problem$")],
+    problem_conversation = ConversationHandler(
+        entry_points=[CallbackQueryHandler(start_problem, pattern="^start_problem$"),
+                      CommandHandler("problem", start_problem)],
         states={
             PROBLEM_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_problem)],
         },
         fallbacks=[CommandHandler("cancel", cancel_conversation),
+                   MessageHandler(filters.TEXT & ~filters.COMMAND, cancel_conversation),
                    CallbackQueryHandler(send_main_menu, pattern="^start$"),
                    CommandHandler("start", start)]
     )
-    application.add_handler(problem_conv_handler)
+    application.add_handler(problem_conversation)
 
     # ConversationHandler для живого чата
     live_chat_conv_handler = ConversationHandler(
