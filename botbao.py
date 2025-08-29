@@ -133,7 +133,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         reply_markup=get_main_keyboard()
     )
 
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+#async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик команды /help."""
     await update.message.reply_text(
         "Мы можем:\n"
@@ -970,7 +970,7 @@ def main() -> None:
     application.add_handler(CommandHandler("review", review_conversation))
     application.add_handler(CommandHandler("order", make_order_command))     # Добавляем новый обработчик
     application.add_handler(CommandHandler("reserve", start_reservation))
-    application.add_handler(CommandHandler("help", help_command))
+   # application.add_handler(CommandHandler("help", help_command))
 
     # Обработчик кнопки "Назад в главное меню"
     application.add_handler(CallbackQueryHandler(send_main_menu, pattern="^start$"))
