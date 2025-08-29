@@ -361,7 +361,7 @@ async def start_live_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await context.bot.send_message(
         chat_id=ADMIN_CHAT_ID,
         text=f"🗣️ НОВЫЙ ЗАПРОС В ПОДДЕРЖКУ: \n\n"
-             f"От: {user.mention_html()} (ID: Ⓝ{user.id}Ⓝ)\n"
+             f"От: {user.mention_html()} \n"
              f"Напишите /reply {user.id} для ответа пользователю.",
         parse_mode="HTML"
     )
@@ -378,7 +378,7 @@ async def handle_user_message_in_chat(update: Update, context: ContextTypes.DEFA
         # Пересылаем сообщение админам
         await context.bot.send_message(
             chat_id=ADMIN_CHAT_ID,
-            text=f"💬 Сообщение от гостя {user.mention_html()} (ID: {user_id}):*\n\n"
+            text=f"💬 Сообщение от {user.mention_html()}: \n\n"
                  f"_{message_text}_",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🚫 Завершить этот чат", callback_data=f"admin_end_chat_{user_id}")]])
@@ -410,7 +410,7 @@ async def end_live_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         # Уведомляем админов о завершении чата
         await context.bot.send_message(
             chat_id=ADMIN_CHAT_ID,
-            text=f"ℹ️ Гость {user.mention_html()} (ID: {user.id}) завершил чат.*",
+            text=f"ℹ️ {user.mention_html()} завершил чат.*",
             parse_mode="HTML"
         )
     else:
@@ -444,9 +444,9 @@ async def admin_end_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         except Exception as e:
             logger.error(f"Could not send message to user {user_to_end_id}: {e}")
 
-        await query.edit_message_text(f"Чат с гостем ID {user_to_end_id} завершен.")
+        await query.edit_message_text(f"Чат с {user_to_end_id.mention_html()} завершен.")
     else:
-        await query.edit_message_text(f"Активный чат с гостем ID {user_to_end_id} не найден.")
+        await query.edit_message_text(f"Активный чат {user_to_end_id.mention_html()} не найден.")
     await query.answer()
 
 
@@ -476,12 +476,12 @@ async def reply_to_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 text=f"💬 *Ответ службы заботы:*\n_{reply_text}_",
                 parse_mode="Markdown"
             )
-            await update.message.reply_text(f"Ответ отправлен гостю ID {user_to_reply_id}.")
+            await update.message.reply_text(f"Ответ отправлен {user_to_reply_id.mention_html()}.")
         except Exception as e:
-            await update.message.reply_text(f"Не удалось отправить ответ гостю ID {user_to_reply_id}: {e}")
-            logger.error(f"Error sending reply to user {user_to_reply_id}: {e}")
+            await update.message.reply_text(f"Не удалось отправить ответ {user_to_reply_id.mention_html()}: {e}")
+            logger.error(f"Error sending reply to user {user_to_reply_id.mention_html()}: {e}")
     else:
-        await update.message.reply_text(f"Гость ID {user_to_reply_id} не находится в активном чате или не найден.")
+        await update.message.reply_text(f"{user_to_reply_id.mention_html()} не находится в активном чате или не найден.")
 
 
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
