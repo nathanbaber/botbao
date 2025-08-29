@@ -90,7 +90,7 @@ def get_main_keyboard():
         [InlineKeyboardButton("❓ Вопросы", callback_data="faq")],
         [InlineKeyboardButton("✍️ Оставить отзыв", callback_data="review")],
         [InlineKeyboardButton("⚠️ Сообщить о проблеме", callback_data="problem")],
-        [InlineKeyboardButton("🗣️ Связаться со службой поддержки", callback_data="support")]
+        [InlineKeyboardButton("🗣️ Связаться со службой заботы", callback_data="support")]
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -185,7 +185,7 @@ async def show_faq_questions(update: Update, context: ContextTypes.DEFAULT_TYPE)
     keyboard = []
     for i, item in enumerate(faq_data.get("Вопросы", [])):
         keyboard.append([InlineKeyboardButton(item['question'], callback_data=f"faq_q_{i}")])
-    keyboard.append([InlineKeyboardButton("🔙 Назад в главное меню", callback_data="start")])
+    keyboard.append([InlineKeyboardButton("🔙 В главное меню", callback_data="start")])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(text="Выберите вопрос, чтобы узнать ответ:", reply_markup=reply_markup)
@@ -223,14 +223,12 @@ ContextTypes.DEFAULT_TYPE) -> int:
     if query:
         await query.answer()
         await query.edit_message_text(
-            "Пожалуйста, напишите ваш отзыв. Он очень важен для нас! "
-            "Чтобы отменить, нажмите /cancel.",
+            "Пожалуйста, напишите Ваш отзыв. Он очень важен для нас!",
             reply_markup=ReplyKeyboardRemove() # Убираем инлайн-клавиатуру
         )
     else: # Если команда вызвана напрямую
         await update.message.reply_text(
-            "Пожалуйста, напишите ваш отзыв. Он очень важен для нас! "
-            "Чтобы отменить, нажмите /cancel.",
+            "Пожалуйста, напишите Ваш отзыв. Он очень важен для нас!",
             reply_markup=ReplyKeyboardRemove() # Убираем инлайн-клавиатуру
         )
     return REVIEW_TEXT
@@ -250,14 +248,14 @@ async def process_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     save_data(REVIEWS_FILE, reviews_data)
 
     await update.message.reply_text(
-        "Спасибо за ваш отзыв! Мы обязательно его учтем.",
+        "Спасибо за Ваш отзыв! Мы стараемся для Вас!",
         reply_markup=get_main_keyboard()
     )
     # Уведомляем админов
     await context.bot.send_message(
         chat_id=ADMIN_CHAT_ID,
-        text=f"📢 *НОВЫЙ ОТЗЫВ ОТ КЛИЕНТА:*\n\n"
-             f"От: {user.mention_html()} (ID: Ⓝ{user.id}Ⓝ)\n"
+        text=f"📢 НОВЫЙ ОТЗЫВ ОТ ГОСТЯ: \n\n"
+             f"От: {user.mention_html()} (ID: {user.id} )\n"
              f"Отзыв: _{review_text}_",
         parse_mode="HTML"
     )
@@ -279,14 +277,14 @@ async def start_problem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     if query:
         await query.answer()
         await query.edit_message_text(
-            "Опишите, пожалуйста, вашу проблему как можно подробнее. "
-            "Это поможет нам быстрее ее решить. Чтобы отменить, нажмите /cancel.",
+            "Опишите, пожалуйста, Вашу проблему как можно подробнее. "
+            "Это поможет нам быстрее ее решить.",
             reply_markup=ReplyKeyboardRemove()
         )
     else:
         await update.message.reply_text(
-            "Опишите, пожалуйста, вашу проблему как можно подробнее. "
-            "Это поможет нам быстрее ее решить. Чтобы отменить, нажмите /cancel.",
+            "Опишите, пожалуйста, Вашу проблему как можно подробнее. "
+            "Это поможет нам быстрее ее решить.",
             reply_markup=ReplyKeyboardRemove()
         )
     return PROBLEM_TEXT
@@ -312,8 +310,8 @@ async def process_problem(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     # Уведомляем админов
     await context.bot.send_message(
         chat_id=ADMIN_CHAT_ID,
-        text=f"🚨 *НОВАЯ ПРОБЛЕМА ОТ КЛИЕНТА:*\n\n"
-             f"От: {user.mention_html()} (ID: Ⓝ{user.id}Ⓝ)\n"
+        text=f"🚨 НОВАЯ ПРОБЛЕМА ОТ ГОСТЯ: \n\n"
+             f"От: {user.mention_html()} (ID: {user.id})\n"
              f"Проблема: _{problem_text}_",
         parse_mode="HTML"
     )
@@ -322,7 +320,7 @@ async def process_problem(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 # --- Функции Live Chat (Служба поддержки) ---
 
 async def start_live_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Начинает чат пользователя с поддержкой."""
+    """Начинает чат пользователя с менеджером."""
     query = update.callback_query
     user = update.effective_user
     user_id = str(user.id)
@@ -331,26 +329,26 @@ async def start_live_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await query.answer()
         if user_id in user_states_data and user_states_data[user_id].get("state") == "chat_active":
             await query.edit_message_text(
-                "Вы уже в активном чате с поддержкой. Пожалуйста, дождитесь ответа или отправьте ваше сообщение.",
+                "Вы уже в активном чате со службой заботы о наших гостях. Пожалуйста, дождитесь ответа или отправьте Ваше сообщение.",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🚫 Завершить чат", callback_data="end_chat")]])
             )
             return LIVE_CHAT_USER
 
         await query.edit_message_text(
-            "Вы подключены к службе поддержки. Опишите ваш вопрос, оператор скоро ответит. "
+            "Вы подключены к службе заботы о наших гостях. Опишите Ваш вопрос, менеджер скоро ответит. "
             "Чтобы завершить чат, нажмите '🚫 Завершить чат'.",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🚫 Завершить чат", callback_data="end_chat")]])
         )
     else: # Если команда вызвана напрямую
          if user_id in user_states_data and user_states_data[user_id].get("state") == "chat_active":
             await update.message.reply_text(
-                "Вы уже в активном чате с поддержкой. Пожалуйста, дождитесь ответа или отправьте ваше сообщение.",
+                "Вы уже в активном чате со службой заботы о наших гостях. Пожалуйста, дождитесь ответа или отправьте Ваше сообщение.",
                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🚫 Завершить чат", callback_data="end_chat")]])
             )
             return LIVE_CHAT_USER
 
          await update.message.reply_text(
-            "Вы подключены к службе поддержки. Опишите ваш вопрос, оператор скоро ответит. "
+            "Вы подключены к службе заботы о наших гостях. Опишите Ваш вопрос, менеджер скоро ответит. "
             "Чтобы завершить чат, нажмите '🚫 Завершить чат'.",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🚫 Завершить чат", callback_data="end_chat")]])
         )
@@ -362,9 +360,9 @@ async def start_live_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     # Уведомляем админов о новом запросе
     await context.bot.send_message(
         chat_id=ADMIN_CHAT_ID,
-        text=f"🗣️ *НОВЫЙ ЗАПРОС В ПОДДЕРЖКУ:*\n\n"
+        text=f"🗣️ НОВЫЙ ЗАПРОС В ПОДДЕРЖКУ: \n\n"
              f"От: {user.mention_html()} (ID: Ⓝ{user.id}Ⓝ)\n"
-             f"Напишите Ⓝ/reply {user.id} Ваш_ответⓃ для ответа пользователю.",
+             f"Напишите /reply {user.id} для ответа пользователю.",
         parse_mode="HTML"
     )
     return LIVE_CHAT_USER
@@ -380,12 +378,12 @@ async def handle_user_message_in_chat(update: Update, context: ContextTypes.DEFA
         # Пересылаем сообщение админам
         await context.bot.send_message(
             chat_id=ADMIN_CHAT_ID,
-            text=f"💬 *Сообщение от клиента {user.mention_html()} (ID: Ⓝ{user_id}Ⓝ):*\n\n"
+            text=f"💬 Сообщение от гостя {user.mention_html()} (ID: {user_id}):*\n\n"
                  f"_{message_text}_",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🚫 Завершить этот чат", callback_data=f"admin_end_chat_{user_id}")]])
         )
-        await update.message.reply_text("Ваше сообщение отправлено оператору.")
+        await update.message.reply_text("Ваше сообщение отправлено менеджеру.")
         return LIVE_CHAT_USER
     else:
         # Если почему-то не в чате, но сообщение пришло сюда
@@ -412,7 +410,7 @@ async def end_live_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         # Уведомляем админов о завершении чата
         await context.bot.send_message(
             chat_id=ADMIN_CHAT_ID,
-            text=f"ℹ️ *Клиент {user.mention_html()} (ID: Ⓝ{user.id}Ⓝ) завершил чат.*",
+            text=f"ℹ️ Гость {user.mention_html()} (ID: {user.id}) завершил чат.*",
             parse_mode="HTML"
         )
     else:
@@ -440,15 +438,15 @@ async def admin_end_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         try:
             await context.bot.send_message(
                 chat_id=int(user_to_end_id),
-                text="Оператор завершил чат с вами. Если у вас есть другие вопросы, воспользуйтесь главным меню.",
+                text="Менеджер завершил чат с Вами. Если у Вас есть другие вопросы, пожалуйста, воспользуйтесь главным меню ли начните чат заново.",
                 reply_markup=get_main_keyboard()
             )
         except Exception as e:
             logger.error(f"Could not send message to user {user_to_end_id}: {e}")
 
-        await query.edit_message_text(f"Чат с клиентом ID Ⓝ{user_to_end_id}Ⓝ завершен.")
+        await query.edit_message_text(f"Чат с гостем ID {user_to_end_id} завершен.")
     else:
-        await query.edit_message_text(f"Активный чат с клиентом ID Ⓝ{user_to_end_id}Ⓝ не найден.")
+        await query.edit_message_text(f"Активный чат с гостем ID {user_to_end_id} не найден.")
     await query.answer()
 
 
@@ -462,8 +460,8 @@ async def reply_to_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     args = context.args
     if not args or len(args) < 2:
         await update.message.reply_text(
-            "Использование: Ⓝ/reply <user_id> <текст_ответа>Ⓝ\n"
-            "Пример: Ⓝ/reply 123456789 Привет, чем могу помочь?Ⓝ",
+            "Использование: /reply <user_id> <текст_ответа>\n"
+            "Пример: /reply 123456789 Привет, чем могу помочь?",
             parse_mode="Markdown"
         )
         return
@@ -475,15 +473,15 @@ async def reply_to_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         try:
             await context.bot.send_message(
                 chat_id=int(user_to_reply_id),
-                text=f"💬 *Ответ службы поддержки:*\n_{reply_text}_",
+                text=f"💬 *Ответ службы заботы:*\n_{reply_text}_",
                 parse_mode="Markdown"
             )
-            await update.message.reply_text(f"Ответ отправлен клиенту ID Ⓝ{user_to_reply_id}Ⓝ.")
+            await update.message.reply_text(f"Ответ отправлен гостю ID {user_to_reply_id}.")
         except Exception as e:
-            await update.message.reply_text(f"Не удалось отправить ответ клиенту ID Ⓝ{user_to_reply_id}Ⓝ: {e}")
+            await update.message.reply_text(f"Не удалось отправить ответ гостю ID {user_to_reply_id}: {e}")
             logger.error(f"Error sending reply to user {user_to_reply_id}: {e}")
     else:
-        await update.message.reply_text(f"Клиент ID Ⓝ{user_to_reply_id}Ⓝ не находится в активном чате или не найден.")
+        await update.message.reply_text(f"Гость ID {user_to_reply_id} не находится в активном чате или не найден.")
 
 
 async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
