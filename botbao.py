@@ -566,7 +566,7 @@ async def start_reservation(update: Update, context) -> int:
 
     calendar_markup = create_month_calendar(now.year, now.month)
 
-    current_keyboard_rows = calendar_markup.inline_keyboard
+    current_keyboard_rows = list(calendar_markup.inline_keyboard)
     current_keyboard_rows.append([InlineKeyboardButton("🔙 В главное меню", callback_data="start")])
     final_markup = InlineKeyboardMarkup(current_keyboard_rows)
 
@@ -598,7 +598,8 @@ async def calendar_callback_handler(update: Update, context) -> int:
         if selected_date < now_date or selected_date > max_reserv_date:
             # Создаем календарь для текущего месяца, чтобы пользователь мог выбрать снова
             new_calendar_markup = create_month_calendar(now_date.year, now_date.month)
-            current_keyboard_rows = new_calendar_markup.inline_keyboard
+
+            current_keyboard_rows = list(new_calendar_markup.inline_keyboard) # Преобразуем в список
             current_keyboard_rows.append([InlineKeyboardButton("🔙 В главное меню", callback_data="start")])
             final_markup = InlineKeyboardMarkup(current_keyboard_rows)
 
