@@ -683,7 +683,7 @@ def generate_time_keyboard(selected_date: date):
             slot_time = time(hour, minute_step)
             slot_full_dt = datetime.combine(selected_date, slot_time)
             # Если дата "сегодня" и время слота уже прошло, пропускаем его
-            if slot_full_dt < now_dt - timedelta(minutes=5): # Даем себе 5 минут "форы"
+            if slot_full_dt >= now_dt - timedelta(minutes=5): # Даем себе 5 минут "форы"
                 time_slots.append(slot_time)
 
     # Размещаем кнопки времени по 4 в ряд
@@ -710,13 +710,6 @@ async def process_time_selection(update: Update, context):
 
     reservation_data = context.user_data.get('reservation_data', {})
 
-    if 'date' not in reservation_data:
-            # Это должно помочь понять, почему даты нет.
-            # Возможно, пользователь пропустил шаг выбора даты или данные были потеряны.
-            await query.edit_message_text("Кажется, что-то пошло не так. Пожалуйста, начните бронирование заново, выбрав дату.",
-                                           reply_markup = InlineKeyboardMarkup(keyboard)) # Или какой-то другой хендлер для старта
-            return ConversationHandler.END # Или STATE_START
-    
     try:
         # Извлекаем время из callback_data, например "time_19:30"
         time_str = query.data.split('_')[1]
@@ -725,13 +718,13 @@ async def process_time_selection(update: Update, context):
         logger.error(f"Неверный формат callback_data для времени: {query.data}")
         await query.edit_message_text(
             "Произошла ошибка при выборе времени. Пожалуйста, попробуйте еще раз.",
-            reply_markup=generate_time_keyboard(reservation_data['date'])
+            reply_markup=generate_time_keyboard(reservation_data['selected_date'])
         )
         return ASK_TIME
 
     # Повторная проверка на прошедшее время, если дата "Сегодня"
     # (Хотя generate_time_keyboard уже отфильтровывает, это дополнительная защита)
-    selected_full_dt = datetime.combine(reservation_data['date'], selected_time)
+    selected_full_dt = datetime.combine(reservation_data['selected_date'], selected_time)
     reservation_data['time'] = selected_time
     reservation_data['full_datetime'] = selected_full_dt
     now_dt = datetime.now()
@@ -742,7 +735,7 @@ async def process_time_selection(update: Update, context):
     if selected_full_dt < now_dt - timedelta(minutes=5): # С тем же запасом
         await query.edit_message_text(
             "Мы пока не умеем перемещаться в прошлое, поэтому выбрать это время не получится😁. Пожалуйста, укажите время, которое только предстоит.",
-            reply_markup=generate_time_keyboard(reservation_data['date'])
+            reply_markup=generate_time_keyboard(reservation_data['selected_date'])
         )
         return ASK_TIME
 
