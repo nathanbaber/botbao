@@ -829,7 +829,7 @@ async def get_name(update: Update, context):
 
     await update.message.reply_text(
         f"Приятно познакомиться, {name_input}!\n"
-        "Напишите, пожалуйста, Ваш номер телефона для связи (например, +79XXYYYYZZZZ)",
+        "Напишите, пожалуйста, Ваш номер телефона для связи (например, +79XXYYYYZZZZ или 89XXXXXXXXX)",
         reply_markup=ReplyKeyboardMarkup([["Отмена бронирования"]], one_time_keyboard=True, resize_keyboard=True)
     )
     return ASK_PHONE
@@ -891,7 +891,10 @@ async def get_phone(update: Update, context):
     await update.message.reply_text(
         "Есть ли у Вас какие-то особые пожелания или комментарии к бронированию? "
         "(например, стол у окна, празднование дня рождения)",
-        reply_markup=ReplyKeyboardMarkup([["Нет пожеланий", "День рождения","Стол у окна", "Отмена бронирования"]], one_time_keyboard=True, resize_keyboard=True)
+        reply_markup=ReplyKeyboardMarkup([
+            ["Нет пожеланий", "День рождения"],    # Первая строка: 2 кнопки
+            ["Стол у окна", "Отмена бронирования"] # Вторая строка: 2 кнопки
+        ], one_time_keyboard=True, resize_keyboard=True)
     )
     return ASK_WISHES
 
@@ -916,7 +919,7 @@ async def get_wishes(update: Update, context):
     # Суммируем информацию для подтверждения
     summary = (
         "Пожалуйста, проверьте данные бронирования:\n"
-        f"📅 Дата: *{format_date_for_display(reservation_data['reservation_data'])}*\n"
+        f"📅 Дата: *{format_date_for_display(reservation_data['selected_date'])}*\n"
         f"⏰ Время: *{reservation_data['time'].strftime('%H:%M')}*\n"
         f"👥 Гостей: *{reservation_data['num_guests']}*\n"
         f"👤 Имя: *{reservation_data['name']}*\n"
@@ -947,7 +950,7 @@ async def confirm_or_cancel_reservation(update: Update, context):
             "🔔 *НОВЫЙ ЗАПРОС НА БРОНИРОВАНИЕ СТОЛИКА!* 🔔\n\n"
             f"От пользователя: @{update.effective_user.username or update.effective_user.id}\n"
             f"ID пользователя: {update.effective_user.id}\n\n"
-            f"📅 Дата: *{format_date_for_display(reservation_data['date'])}*\n"
+            f"📅 Дата: *{format_date_for_display(reservation_data['selected_date'])}*\n"
             f"⏰ Время: *{reservation_data['time'].strftime('%H:%M')}*\n"
             f"👥 Гостей: *{reservation_data['num_guests']}*\n"
             f"👤 Имя: *{reservation_data['name']}*\n"
