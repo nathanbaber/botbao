@@ -432,16 +432,10 @@ async def handle_user_message_in_chat(update: Update, context: ContextTypes.DEFA
     # Проверяем, что пользователь действительно в режиме чата
     if user_id in user_states_data and user_states_data[user_id].get("state") == "chat_active":
         # Пересылаем сообщение админам
-         # Используем forward_message для сохранения типа сообщения (текст, фото, документ и т.д.)
-        await context.bot.forward_message(
-            chat_id=ADMIN_CHAT_ID,
-            from_chat_id=user.id,
-            message_id=update.message.message_id
-        )
-        # Дополнительное сообщение для админа с кнопкой завершения
         await context.bot.send_message(
             chat_id=ADMIN_CHAT_ID,
-            text=f"⬆️ Сообщение выше от {user.mention_html()} (ID: {user.id}).",
+            text=f"💬 Сообщение от {user.mention_html()}: \n\n"
+                 f"{message_text}",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🚫 Завершить этот чат", callback_data=f"admin_end_chat_{user_id}")]])
         )
@@ -673,8 +667,6 @@ async def calendar_callback_handler(update: Update, context: ContextTypes.DEFAUL
         # query.answer() уже был вызван в начале функции.
         return ASK_DATE # Остаемся в текущем состоянии
 
-    # Если callback_data не соответствует ни одному из ожидаемых шаблонов
-    await query.edit_message_text("Неизвестное действие.")
     return ASK_DATE
 
 def generate_time_keyboard(selected_date: date):
