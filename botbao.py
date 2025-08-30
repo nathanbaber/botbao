@@ -683,7 +683,7 @@ def generate_time_keyboard(selected_date: date):
             slot_time = time(hour, minute_step)
             slot_full_dt = datetime.combine(selected_date, slot_time)
             # Если дата "сегодня" и время слота уже прошло, пропускаем его
-            if slot_full_dt >= now_dt - timedelta(minutes=5): # Даем себе 5 минут "форы"
+            if slot_full_dt >= now_dt:
                 time_slots.append(slot_time)
 
     # Размещаем кнопки времени по 4 в ряд
@@ -729,10 +729,15 @@ async def process_time_selection(update: Update, context):
     reservation_data['full_datetime'] = selected_full_dt
     now_dt = datetime.now()
 
+    logger.debug(f"DEBUG: Выбранное время: {selected_time}")
+    logger.debug(f"DEBUG: Полное выбранное время (datetime): {selected_full_dt}")
+    logger.debug(f"DEBUG: Текущее время now_dt: {now_dt}")
+    logger.debug(f"DEBUG: Порог для сравнения: {now_dt - timedelta(minutes=5)}")
+
     print(f"DEBUG: Saved time: {reservation_data['time']}")
     print(f"DEBUG: Saved full_datetime: {reservation_data['full_datetime']}")
 
-    if selected_full_dt < now_dt - timedelta(minutes=5): # С тем же запасом
+    if selected_full_dt <= now_dt:
         await query.edit_message_text(
             "Мы пока не умеем перемещаться в прошлое, поэтому выбрать это время не получится😁. Пожалуйста, укажите время, которое только предстоит.",
             reply_markup=generate_time_keyboard(reservation_data['selected_date'])
@@ -770,7 +775,7 @@ async def get_guests(update: Update, context):
         if num_guests <= 0:
             await update.message.reply_text("Количество человек должно быть положительным числом.")
             return ASK_GUESTS
-        if num_guests > 20: # Пример ограничения
+        if num_guests > 8:
             await update.message.reply_text("Для бронирования более 8 человек, пожалуйста, свяжитесь с нами по телефону +7 (918) 582-31-51.")
             return ASK_GUESTS
     except ValueError:
@@ -853,7 +858,7 @@ async def get_wishes(update: Update, context):
     # Суммируем информацию для подтверждения
     summary = (
         "Пожалуйста, проверьте данные бронирования:\n"
-        f"📅 Дата: *{format_date_for_display(reservation_data['date'])}*\n"
+        f"📅 Дата: *{format_date_for_display(reservation_data['reservation_data'])}*\n"
         f"⏰ Время: *{reservation_data['time'].strftime('%H:%M')}*\n"
         f"👥 Гостей: *{reservation_data['num_guests']}*\n"
         f"👤 Имя: *{reservation_data['name']}*\n"
