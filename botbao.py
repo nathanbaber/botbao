@@ -376,7 +376,7 @@ async def _send_chat_status_message(update: Update, context: ContextTypes.DEFAUL
     )
     new_chat_message = (
         "Вы подключены к службе заботы о наших гостях. Опишите Ваш вопрос, менеджер скоро ответит. "
-        "Чтобы завершить чат, нажмите '🚫 Завершить чат'."
+        "Чтобы завершить чат, нажмите '🚫 Завершить чат'."   
     )
     reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🚫 Завершить чат", callback_data="end_chat")]])
 
@@ -520,7 +520,6 @@ async def reply_to_user(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     user_to_reply_id = args[0]
     reply_text = " ".join(args[1:])
-
     if user_to_reply_id in user_states_data and user_states_data[user_to_reply_id].get("state") == "chat_active":
         try:
             await context.bot.send_message(
@@ -602,7 +601,6 @@ async def start_reservation(update: Update, context) -> InlineKeyboardMarkup:
         "В какой день Вы планируете посетить наше бистро? Пожалуйста, выберите дату:",
         reply_markup=final_markup
     )
-
     return ASK_DATE
 
 async def calendar_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -661,11 +659,6 @@ async def calendar_callback_handler(update: Update, context: ContextTypes.DEFAUL
 
         await query.edit_message_reply_markup(reply_markup=final_markup)
         return ASK_DATE # Остаемся в состоянии выбора даты
-
-    elif data == "ignore":
-        # Если нажата неактивная кнопка, просто ничего не делаем.
-        # query.answer() уже был вызван в начале функции.
-        return ASK_DATE # Остаемся в текущем состоянии
 
     return ASK_DATE
 
