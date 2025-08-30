@@ -15,6 +15,9 @@ from telegram.ext import (
 from telegram.error import BadRequest
 from telegram_bot_calendar import DetailedTelegramCalendar, LSTEP
 import html
+import pytz 
+
+MOSCOW_TZ = pytz.timezone('Europe/Moscow')
 
 # Настройка логирования
 logging.basicConfig(
@@ -670,7 +673,7 @@ async def calendar_callback_handler(update: Update, context: ContextTypes.DEFAUL
 def generate_time_keyboard(selected_date: date):
 
     keyboard = []
-    now_dt = datetime.now() # Текущая дата и время
+    now_dt = datetime.now(MOSCOW_TZ) # Текущая дата и время
     
     #диапазон работы заведения
     start_hour = 11
@@ -727,7 +730,7 @@ async def process_time_selection(update: Update, context):
     selected_full_dt = datetime.combine(reservation_data['selected_date'], selected_time)
     reservation_data['time'] = selected_time
     reservation_data['full_datetime'] = selected_full_dt
-    now_dt = datetime.now()
+    now_dt = datetime.now(MOSCOW_TZ)
 
     logger.debug(f"DEBUG: Выбранное время: {selected_time}")
     logger.debug(f"DEBUG: Полное выбранное время (datetime): {selected_full_dt}")
@@ -776,8 +779,8 @@ async def get_guests(update: Update, context):
             await update.message.reply_text("Количество человек должно быть положительным числом.")
             return ASK_GUESTS
         if num_guests > 8:
-            await update.message.reply_text("Для бронирования более 8 человек, пожалуйста, свяжитесь с нами по телефону +7 (918) 582-31-51.")
-            return ASK_GUESTS
+            await update.message.reply_text("Для бронирования более 8 человек, пожалуйста, свяжитесь с нами по телефону +7 (918) 582-31-51.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 В главное меню", callback_data="start")]]))
+            return ConversationHandler.END
     except ValueError:
         await update.message.reply_text("Пожалуйста, введите количество человек числом (например, 4).")
         return ASK_GUESTS
