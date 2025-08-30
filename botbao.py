@@ -270,7 +270,7 @@ async def process_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     await update.message.reply_text(
        "Спасибо за Ваш отзыв! Мы стараемся для Вас!",
-       reply_markup=get_main_keyboard()
+       reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 В главное меню", callback_data="start")]])
     )
     # Уведомляем админов
     await context.bot.send_message(
@@ -333,7 +333,7 @@ async def process_problem(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     await update.message.reply_text(
         "Спасибо за сообщение. Мы уже работаем над решением!",
-        reply_markup=get_main_keyboard()
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 В главное меню", callback_data="start")]])
     )
     # Уведомляем админов
     await context.bot.send_message(
@@ -761,7 +761,7 @@ async def process_time_selection(update: Update, context):
     await query.answer()
 
     if query.data == "cancel_reserve":
-        await query.edit_message_text("❌ Бронирование отменено.", reply_markup=None)
+        await query.edit_message_text("❌ Бронирование отменено.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 В главное меню", callback_data="start")]]))
         context.user_data.pop('reservation_data', None)
         return ConversationHandler.END
 
@@ -813,7 +813,7 @@ async def get_guests(update: Update, context):
     reservation_data = context.user_data['reservation_data']
 
     if text.lower() == "отмена":
-        await update.message.reply_text("Бронирование отменено.", reply_markup=ReplyKeyboardRemove())
+        await update.message.reply_text("Бронирование отменено.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 В главное меню", callback_data="start")]]))
         context.user_data.pop('reservation_data', None)
         return ConversationHandler.END
 
@@ -843,7 +843,7 @@ async def get_name(update: Update, context):
     reservation_data = context.user_data['reservation_data']
 
     if text.lower() == "отмена":
-        await update.message.reply_text("Бронирование отменено.", reply_markup=ReplyKeyboardRemove())
+        await update.message.reply_text("Бронирование отменено.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 В главное меню", callback_data="start")]]))
         context.user_data.pop('reservation_data', None)
         return ConversationHandler.END
 
@@ -861,7 +861,7 @@ async def get_phone(update: Update, context):
     reservation_data = context.user_data['reservation_data']
 
     if text.lower() == "отмена":
-        await update.message.reply_text("Бронирование отменено.",reply_markup=ReplyKeyboardRemove())
+        await update.message.reply_text("Бронирование отменено.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 В главное меню", callback_data="start")]]))
         context.user_data.pop('reservation_data', None)
         return ConversationHandler.END
 
@@ -890,7 +890,7 @@ async def get_wishes(update: Update, context):
     reservation_data = context.user_data['reservation_data']
 
     if text.lower() == "отмена":
-        await update.message.reply_text("Бронирование отменено.", reply_markup=ReplyKeyboardRemove())
+        await update.message.reply_text("Бронирование отменено.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 В главное меню", callback_data="start")]]))
         context.user_data.pop('reservation_data', None)
         return ConversationHandler.END
     elif text.lower() == "нет пожеланий":
@@ -960,17 +960,17 @@ async def confirm_or_cancel_reservation(update: Update, context):
                 "✅ Ваш запрос на бронирование отправлен менеджеру.\n"
                 "Мы свяжемся с Вами в ближайшее время для подтверждения!\n"
                 "Спасибо за выбор нашего заведения!",
-                reply_markup=None # Убираем кнопки после подтверждения
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 В главное меню", callback_data="start")]])  # Убираем кнопки после подтверждения
             )
         except Exception as e:
             logger.error(f"Не удалось отправить сообщение менеджеру: {e}")
             await query.edit_message_text(
                 "Произошла ошибка при отправке запроса менеджеру. Пожалуйста, попробуйте позже.",
-                reply_markup=None
+                 reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 В главное меню", callback_data="start")]])
             )
 
     elif query.data == "cancel_reserve":
-        await query.edit_message_text("❌ Бронирование отменено.", reply_markup=None)
+        await query.edit_message_text("❌ Бронирование отменено.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 В главное меню", callback_data="start")]]))
         context.user_data.pop('reservation_data', None)
 
     # Очищаем данные пользователя после завершения диалога
@@ -986,7 +986,7 @@ async def cancel_reservation(update: Update, context):
 
 # Обработчик для случаев, когда пользователь ввел что-то неожиданное в диалоге
 async def fallback_handler(update: Update, context):
-    await update.message.reply_text("Пожалуйста, следуйте инструкциям или нажмите 'Отмена'.")
+    await update.message.reply_text("Пожалуйста, следуйте инструкциям.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 В главное меню", callback_data="start")]]))
     return ConversationHandler.END
         
 async def make_order_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -994,13 +994,6 @@ async def make_order_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await update.message.reply_text("Функция онлайн-заказа пока не доступна.Вы можете просмотреть наше меню, а для заказа свяжитесь с нами напрямую по телефону +7 (918) 582-31-51.",
         reply_markup=get_main_keyboard()
     )
-
-async def book_table(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    user_id = update.effective_user.id
-    logger.info(f"Пользователь {user_id} нажал 'Забронировать стол'.")
-    # Здесь начнется логика бронирования
-    await update.message.reply_text("Отлично! Для бронирования стола мне потребуется несколько деталей. Пожалуйста, выберите дату:")
-    return ASK_DATE
     
 
 # --- Главная функция бота ---
