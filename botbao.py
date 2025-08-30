@@ -619,7 +619,7 @@ async def calendar_callback_handler(update: Update, context: ContextTypes.DEFAUL
 
         # Дополнительная валидация выбранной даты
         if selected_date < now_date:
-            await query.edit_message_text("Выбрана прошедшая дата. Пожалуйста, выберите текущую или будущую дату.",
+            await query.edit_message_text("Эх, если бы мы могли бронировать столы на '"'вчера'"', мы бы сами там сидели!😉 Увы, машина времени пока в ремонте. Выберите, пожалуйста, дату, которая еще не наступила.",
                                           reply_markup=create_month_calendar(now_date.year, now_date.month, now_date))
             return ASK_DATE # Остаемся в состоянии выбора даты
         elif selected_date > max_reserv_date:
@@ -629,16 +629,13 @@ async def calendar_callback_handler(update: Update, context: ContextTypes.DEFAUL
 
         # Если дата валидна, сохраняем ее и переходим к следующему шагу (например, выбор времени)
         context.user_data['reservation_data']['selected_date'] = selected_date
-        await query.edit_message_text(f"Вы выбрали: {selected_date.strftime('%d.%m.%Y')}. Теперь выберите время.")
-        
-        # Здесь вы можете создать и отправить InlineKeyboardMarkup для выбора времени
-        # Например:
-        # time_keyboard = InlineKeyboardMarkup([
-        #     [InlineKeyboardButton("12:00", callback_data="time_1200"), InlineKeyboardButton("13:00", callback_data="time_1300")],
-        #     [InlineKeyboardButton("18:00", callback_data="time_1800"), InlineKeyboardButton("19:00", callback_data="time_1900")],
-        # ])
-        # await query.message.reply_text("Выберите время:", reply_markup=time_keyboard)
-        return ASK_TIME # Переходим в следующее состояние
+        await query.edit_message_text(
+            f"Отлично! Дата: {format_date_for_display(selected_date)}.\n"
+            "Теперь укажите желаемое время:",
+            reply_markup=generate_time_keyboard(selected_date) # Генерируем клавиатуру времени
+        )
+        return ASK_TIME
+       
 
     elif data.startswith("month_"):
         _, year_str, month_str = data.split("_")
