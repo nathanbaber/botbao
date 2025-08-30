@@ -658,7 +658,6 @@ async def calendar_callback_handler(update: Update, context: ContextTypes.DEFAUL
 
     elif data == "start":
         context.user_data['reservation_data'] = {} # Очищаем данные бронирования
-        await query.edit_message_text("❌ Бронирование отменено.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 В главное меню", callback_data="start")]]))
         return ConversationHandler.END
 
     elif data == "ignore":
