@@ -671,8 +671,6 @@ async def calendar_callback_handler(update: Update, context: ContextTypes.DEFAUL
     return ASK_DATE
 
 def generate_time_keyboard(selected_date: date):
-
-    keyboard = []
     now_dt = datetime.now(MOSCOW_TZ) # Текущая дата и время
     
     #диапазон работы заведения
@@ -683,14 +681,14 @@ def generate_time_keyboard(selected_date: date):
 
     for hour in range(start_hour, end_hour + 1):
         for minute_step in [0, 30]: # Шаги по 30 минут
-            slot_time = time(hour, minute_step)
-            slot_full_dt = datetime.combine(selected_date, slot_time)
-            # Если дата "сегодня" и время слота уже прошло, пропускаем его
-            if slot_full_dt >= now_dt:
-                time_slots.append(slot_time)
+            proposed_naive_dt = datetime.combine(date, datetime.min.replace(hour=hour, minute=minute_step).time())
+            proposed_aware_dt_moscow = MOSCOW_TZ.localize(proposed_naive_dt)
+            if proposed_aware_dt_moscow >= now_dt:
+                time_slots.append(proposed_naive_dt) # Добавляем "naive" время для отображения
 
     # Размещаем кнопки времени по 4 в ряд
     row = []
+    keyboard = []
     for i, slot in enumerate(time_slots):
         row.append(InlineKeyboardButton(slot.strftime("%H:%M"), callback_data=f"time_{slot.strftime('%H:%M')}"))
         if len(row) == 4 or i == len(time_slots) - 1: # Закрываем ряд каждые 4 кнопки или если это последняя
