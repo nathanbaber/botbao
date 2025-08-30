@@ -714,42 +714,44 @@ async def process_time_selection(update: Update, context):
     try:
         # Извлекаем время из callback_data, например "time_19:30"
         time_str = query.data.split('_')[1]
-        selected_time = datetime.strptime(time_str, "%H:%M").time()
+        selected_time_naive = datetime.strptime(time_str, "%H:%M").time()
     except (IndexError, ValueError):
         logger.error(f"Неверный формат callback_data для времени: {query.data}")
+        date_for_keyboard = reservation_data.get('selected_date', datetime.now().date())
         await query.edit_message_text(
             "Произошла ошибка при выборе времени. Пожалуйста, попробуйте еще раз.",
-            reply_markup=generate_time_keyboard(reservation_data['selected_date'])
+            reply_markup=generate_time_keyboard(date_for_keyboard)
         )
         return ASK_TIME
 
+    now_dt_moscow = datetime.now(MOSCOW_TZ)
+
     # Повторная проверка на прошедшее время, если дата "Сегодня"
     # (Хотя generate_time_keyboard уже отфильтровывает, это дополнительная защита)
-    selected_full_dt = datetime.combine(reservation_data['selected_date'], selected_time)
-    reservation_data['time'] = selected_time
-    reservation_data['full_datetime'] = selected_full_dt
-    now_dt = datetime.now(MOSCOW_TZ)
+    selected_full_dt_naive = datetime.combine(reservation_data['selected_date'], selected_time_naive)
+    selected_full_dt_moscow = MOSCOW_TZ.localize(selected_full_dt_naive)
 
-    logger.debug(f"DEBUG: Выбранное время: {selected_time}")
-    logger.debug(f"DEBUG: Полное выбранное время (datetime): {selected_full_dt}")
-    logger.debug(f"DEBUG: Текущее время now_dt: {now_dt}")
-    logger.debug(f"DEBUG: Порог для сравнения: {now_dt - timedelta(minutes=5)}")
+    reservation_data['time'] = selected_time_naive
+    reservation_data['full_datetime'] = selected_full_dt_moscow
 
-    print(f"DEBUG: Saved time: {reservation_data['time']}")
-    print(f"DEBUG: Saved full_datetime: {reservation_data['full_datetime']}")
+    logger.debug(f"DEBUG: Выбранное время: {selected_time_naive}")
+    logger.debug(f"DEBUG: Полное выбранное время (datetime, MSK): {selected_full_dt_moscow}")
+    logger.debug(f"DEBUG: Текущее время now_dt (MSK): {now_dt_moscow}")
+    logger.debug(f"DEBUG: Порог для сравнения (MSK): {now_dt_moscow - timedelta(minutes=5)}")
 
-    if selected_full_dt <= now_dt:
+    if selected_full_dt_moscow <= now_dt_moscow:
         await query.edit_message_text(
             "Мы пока не умеем перемещаться в прошлое, поэтому выбрать это время не получится😁. Пожалуйста, укажите время, которое только предстоит.",
             reply_markup=generate_time_keyboard(reservation_data['selected_date'])
         )
         return ASK_TIME
 
-    reservation_data['time'] = selected_time
-    logger.info(f"Время бронирования выбрано: {selected_time}")
+    reservation_data['time'] = selected_time_naive
+    reservation_data['full_datetime'] = selected_full_dt_moscow # Сохраняем aware datetime для дальнейших операций
+    logger.info(f"Время бронирования выбрано: {selected_time_naive}")
 
     await query.edit_message_text(
-        text=f"Выбрано время: {selected_time.strftime('%H:%M')}.",
+        text=f"Выбрано время: {selected_time_naive.strftime('%H:%M')}.",
         reply_markup=InlineKeyboardMarkup([]) # <--- Вот здесь мы передаем пустую InlineKeyboardMarkup
     )
 
