@@ -28,6 +28,21 @@ ADMIN_CHAT_ID = int(os.getenv("ADMIN_CHAT_ID"))
            
 # --------------------------
 
+russian_month_names = {
+    1: "Январь",
+    2: "Февраль",
+    3: "Март",
+    4: "Апрель",
+    5: "Май",
+    6: "Июнь",
+    7: "Июль",
+    8: "Август",
+    9: "Сентябрь",
+    10: "Октябрь",
+    11: "Ноябрь",
+    12: "Декабрь"
+}
+
 # Состояния для ConversationHandler
 (MENU_CATEGORY, MENU_ITEM,
  FAQ_QUESTION,
@@ -517,14 +532,10 @@ async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_main_menu(update, context)
 
 
-def create_month_calendar(year: int, month: int, min_date: datetime.date = None):
+def create_month_calendar(year: int, month: int, min_date: date):
     cal = calendar.Calendar()
     month_days = cal.monthdatescalendar(year, month)
     keyboard = []
-
-    # Устанавливаем min_date по умолчанию на сегодняшнюю дату, если не передана
-    if min_date is None:
-        min_date = date.today()
 
     # Заголовки дней недели
     keyboard.append([InlineKeyboardButton(day, callback_data="ignore") for day in ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]])
@@ -546,17 +557,15 @@ def create_month_calendar(year: int, month: int, min_date: datetime.date = None)
                 row.append(InlineKeyboardButton(" ", callback_data="ignore")) # Пустые клетки для других месяцев
         keyboard.append(row)
 
-        # Кнопки для навигации
-    first_day_of_current_month = date(year, month, 1)
-
     prev_month_date = (date(year, month, 1) - timedelta(days=1))
     next_month_date = (date(year, month, 1) + timedelta(days=31)).replace(day=1)
 
     keyboard.append([
-        InlineKeyboardButton(f"<{prev_month_date.strftime('%B')}", callback_data=f"month_{prev_month_date.year}_{prev_month_date.month}"),
-        InlineKeyboardButton(datetime(year, month, 1).strftime("%B %Y"), callback_data="ignore"),
-        InlineKeyboardButton(f"{next_month_date.strftime('%B')}>", callback_data=f"month_{next_month_date.year}_{next_month_date.month}")
+        InlineKeyboardButton(f"<{russian_month_names[prev_month_date.month]}", callback_data=f"month_{prev_month_date.year}_{prev_month_date.month}"),
+        InlineKeyboardButton(f"{russian_month_names[month]} {year}", callback_data="ignore"), # Используем словарь для текущего месяца
+        InlineKeyboardButton(f"{russian_month_names[next_month_date.month]}>", callback_data=f"month_{next_month_date.year}_{next_month_date.month}")
     ])
+
     return InlineKeyboardMarkup(keyboard)    
 
 
@@ -570,16 +579,9 @@ async def start_reservation(update: Update, context) -> InlineKeyboardMarkup:
     else:
         # Если это команда (например, /reserve), мы отвечаем на сообщение
         message_editor = update.message.reply_text
+
     context.user_data['reservation_data'] = {} # Инициализация данных для бронирования
     now = datetime.now()
-
-    #  Создаем календарь
-    # calendar, step = DetailedTelegramCalendar(
-    #     locale='ru',
-    #     min_date=now.date(), # Нельзя выбрать прошедшую дату
-    #     max_date=now.date() + timedelta(days=30), # Максимум на 1 месяц вперед
-    # ).build()
-    #
 
     calendar_markup = create_month_calendar(now.year, now.month, min_date=now.date())
 
@@ -591,10 +593,6 @@ async def start_reservation(update: Update, context) -> InlineKeyboardMarkup:
         "В какой день Вы планируете посетить наше бистро? Пожалуйста, выберите дату:",
         reply_markup=final_markup
     )
-
-    # await query.edit_message_text("В какой день Вы планируете посетить наше бистро? Пожалуйста, выберите дату:",
-    #     reply_markup=calendar
-    # )
 
     return ASK_DATE
 
@@ -657,12 +655,8 @@ async def calendar_callback_handler(update: Update, context: ContextTypes.DEFAUL
         return ASK_DATE # Остаемся в состоянии выбора даты
 
     elif data == "start":
-        # Логика перехода в главное меню
-        await query.edit_message_text("Возвращаемся в главное меню.")
         context.user_data['reservation_data'] = {} # Очищаем данные бронирования
-        # Здесь вы можете вызвать функцию для отображения главного меню
-        # await main_menu_function(update, context)
-        return -1 # Завершаем ConversationHandler или переходим в другое начальное состояние
+        return ConversationHandler.END
 
     elif data == "ignore":
         # Если нажата неактивная кнопка, просто ничего не делаем.
