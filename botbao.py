@@ -633,7 +633,6 @@ async def calendar_callback_handler(update: Update, context: ContextTypes.DEFAUL
             reply_markup=generate_time_keyboard(selected_date) # Генерируем клавиатуру времени
         )
         return ASK_TIME
-       
 
     elif data.startswith("month_"):
         _, year_str, month_str = data.split("_")
@@ -668,57 +667,8 @@ async def calendar_callback_handler(update: Update, context: ContextTypes.DEFAUL
     await query.edit_message_text("Неизвестное действие.")
     return ASK_DATE
 
-
-# Хендлер для обработки выбора даты из календаря
-# async def process_date_selection(update: Update, context) -> int:
-#     query = update.callback_query
-#     await query.answer() 
-#     now = datetime.now()
-
-#     # Обрабатываем клики по календарю
-#     result, key, step = DetailedTelegramCalendar(
-#         locale='ru',
-#         min_date=now.date(),
-#         max_date=now.date() + timedelta(days=30)
-#     ).process(query.data)
-
-#     if not result and key: # Пользователь еще выбирает месяц/год/день
-#         await query.edit_message_text(
-#             f"В какой день Вы планируете посетить наше бистро? Пожалуйста, выберите дату:",
-#             reply_markup=key
-#         )
-#         return ASK_DATE
-#     elif result: # Дата выбрана
-#         selected_date = result
-#         today = now.date()
-
-#         # Повторная проверка на прошедшую дату (хотя min_date должен предотвратить)
-#         if selected_date < today:
-#             await query.edit_message_text(
-#                 "Эх, если бы мы могли бронировать столы на '"'вчера'"', мы бы сами там сидели!😉 Увы, машина времени пока в ремонте. Выберите, пожалуйста, дату, которая еще не наступила.",
-#                 reply_markup=None # Убираем календарь
-#             )
-#             # Отправляем новый календарь для выбора
-#             calendar, step = DetailedTelegramCalendar(
-#                 locale='ru',
-#                 min_date=today,
-#                 max_date=today + timedelta(days=30)
-#             ).build()
-#             await query.message.reply_text("Пожалуйста, выберите корректную дату:", reply_markup=calendar)
-#             return ASK_DATE
-
-#         context.user_data['reservation_data']['date'] = selected_date
-#         logger.info(f"Дата бронирования выбрана: {selected_date}")
-
-#         await query.edit_message_text(
-#             f"Отлично! Дата: {format_date_for_display(selected_date)}.\n"
-#             "Теперь укажите желаемое время:",
-#             reply_markup=generate_time_keyboard(selected_date) # Генерируем клавиатуру времени
-#         )
-#         return ASK_TIME
-
-
 def generate_time_keyboard(selected_date: date):
+
     keyboard = []
     now_dt = datetime.now() # Текущая дата и время
     current_time = now_dt.time()
@@ -728,15 +678,14 @@ def generate_time_keyboard(selected_date: date):
     end_hour = 21 # До 21:00 включительно
 
     time_slots = []
+
     for hour in range(start_hour, end_hour + 1):
         for minute_step in [0, 30]: # Шаги по 30 минут
             slot_time = time(hour, minute_step)
             slot_full_dt = datetime.combine(selected_date, slot_time)
             # Если дата "сегодня" и время слота уже прошло, пропускаем его
-            if slot_full_dt < now_dt - timedelta(minutes=5): # Даем себе 5 минут "форы"
-                continue
-            
-            time_slots.append(slot_time)
+            if slot_full_dt < current_time - timedelta(minutes=5): # Даем себе 5 минут "форы"
+                time_slots.append(slot_time)
 
     # Размещаем кнопки времени по 4 в ряд
     row = []
@@ -747,20 +696,27 @@ def generate_time_keyboard(selected_date: date):
             row = []
     
     keyboard.append([InlineKeyboardButton("Отмена бронирования", callback_data="cancel_reserve")])
-
     return InlineKeyboardMarkup(keyboard)
 
 # Хендлер для обработки выбора времени из инлайн-клавиатуры
 async def process_time_selection(update: Update, context):
     query = update.callback_query
     await query.answer()
+    print(f"DEBUG: context.user_data at process_time_selection start: {context.user_data}")
 
     if query.data == "cancel_reserve":
         await query.edit_message_text("❌ Бронирование отменено.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 В главное меню", callback_data="start")]]))
         context.user_data.pop('reservation_data', None)
         return ConversationHandler.END
 
-    reservation_data = context.user_data['reservation_data']
+    reservation_data = context.user_data.get('reservation_data', {})
+
+    if 'date' not in reservation_data:
+            # Это должно помочь понять, почему даты нет.
+            # Возможно, пользователь пропустил шаг выбора даты или данные были потеряны.
+            await query.edit_message_text("Кажется, что-то пошло не так. Пожалуйста, начните бронирование заново, выбрав дату.",
+                                           reply_markup = InlineKeyboardMarkup(keyboard)) # Или какой-то другой хендлер для старта
+            return ConversationHandler.END # Или STATE_START
     
     try:
         # Извлекаем время из callback_data, например "time_19:30"
@@ -777,7 +733,12 @@ async def process_time_selection(update: Update, context):
     # Повторная проверка на прошедшее время, если дата "Сегодня"
     # (Хотя generate_time_keyboard уже отфильтровывает, это дополнительная защита)
     selected_full_dt = datetime.combine(reservation_data['date'], selected_time)
+    reservation_data['time'] = selected_time
+    reservation_data['full_datetime'] = selected_full_dt
     now_dt = datetime.now()
+
+    print(f"DEBUG: Saved time: {reservation_data['time']}")
+    print(f"DEBUG: Saved full_datetime: {reservation_data['full_datetime']}")
 
     if selected_full_dt < now_dt - timedelta(minutes=5): # С тем же запасом
         await query.edit_message_text(
