@@ -3,6 +3,7 @@ import logging
 import json
 import os
 import re
+from xml.dom.minidom import NamedNodeMap
 from dotenv import load_dotenv; load_dotenv()
 load_dotenv()
 from datetime import datetime, timedelta, date, time 
@@ -656,10 +657,6 @@ async def calendar_callback_handler(update: Update, context: ContextTypes.DEFAUL
         await query.edit_message_reply_markup(reply_markup=final_markup)
         return ASK_DATE # Остаемся в состоянии выбора даты
 
-    elif data == "start":
-        context.user_data['reservation_data'] = {} # Очищаем данные бронирования
-        return ConversationHandler.END
-
     elif data == "ignore":
         # Если нажата неактивная кнопка, просто ничего не делаем.
         # query.answer() уже был вызван в начале функции.
@@ -757,7 +754,7 @@ async def process_time_selection(update: Update, context):
     await context.bot.send_message(
         chat_id=query.message.chat_id,
         text="На сколько человек бронируем стол? (например, 4)",
-        reply_markup=ReplyKeyboardMarkup([["Отмена"]], one_time_keyboard=True, resize_keyboard=True)
+        reply_markup=ReplyKeyboardMarkup([["Отмена бронирования"]], one_time_keyboard=True, resize_keyboard=True)
     )
 
     return ASK_GUESTS
@@ -767,8 +764,8 @@ async def get_guests(update: Update, context):
     text = update.message.text
     reservation_data = context.user_data['reservation_data']
 
-    if text.lower() == "отмена":
-        await update.message.reply_text("Бронирование отменено.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 В главное меню", callback_data="start")]]))
+    if text.lower() == "отмена бронирования":
+        await update.message.reply_text("❌ Бронирование отменено.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 В главное меню", callback_data="start")]]))
         context.user_data.pop('reservation_data', None)
         return ConversationHandler.END
 
@@ -788,25 +785,52 @@ async def get_guests(update: Update, context):
     await update.message.reply_text(
         f"Отлично, {num_guests} человек.\n"
         "На какое имя резервируем стол?",
-        reply_markup=ReplyKeyboardMarkup([["Отмена"]], one_time_keyboard=True, resize_keyboard=True)
+        reply_markup=ReplyKeyboardMarkup([["Отмена бронирования"]], one_time_keyboard=True, resize_keyboard=True)
     )
     return ASK_NAME
+
+NAME_PATTERN = re.compile(r"^[а-яА-Яa-zA-Z\s\-']+$")
 
 # 5. Получение имени
 async def get_name(update: Update, context):
     text = update.message.text
     reservation_data = context.user_data['reservation_data']
 
-    if text.lower() == "отмена":
-        await update.message.reply_text("Бронирование отменено.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 В главное меню", callback_data="start")]]))
+    if text.lower() == "отмена бронирования":
+        await update.message.reply_text("❌ Бронирование отменено.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 В главное меню", callback_data="start")]]))
         context.user_data.pop('reservation_data', None)
         return ConversationHandler.END
 
-    reservation_data['name'] = text
+    name_input = text.strip()
+
+    if not name_input:
+        await update.message.reply_text("Имя не может быть пустым. Пожалуйста, введите Ваше имя.")
+        return ASK_NAME # Возвращаемся в то же состояние, чтобы запросить имя снова
+
+    # Проверка длины имени
+    if len(name_input) < 2 or len(name_input) > 50: # Пример: от 2 до 50 символов
+        await update.message.reply_text(
+            "Имя должно быть длиной от 2 до 50 символов. "
+            "Пожалуйста, введите Ваше полное имя."
+        )
+        return ASK_NAME
+
+    # Проверка на корректные символы с использованием регулярного выражения
+    if not NAME_PATTERN.fullmatch(name_input):
+        await update.message.reply_text(
+            "Кажется, это не похоже на имя. "
+            "Пожалуйста, используйте только буквы, пробелы, дефисы или апострофы."
+        )
+        return ASK_NAME # Возвращаемся в то же состояние, чтобы запросить имя снова
+    # --- Конец проверки имени ---
+
+    reservation_data['name'] = name_input
+    context.user_data['reservation_data'] = reservation_data # Обновляем user_data
+
     await update.message.reply_text(
-        f"Приятно познакомиться, {text}!\n"
+        f"Приятно познакомиться, {name_input}!\n"
         "Напишите, пожалуйста, Ваш номер телефона для связи (например, +79XXYYYYZZZZ)",
-        reply_markup=ReplyKeyboardMarkup([["Отмена"]], one_time_keyboard=True, resize_keyboard=True)
+        reply_markup=ReplyKeyboardMarkup([["Отмена бронирования"]], one_time_keyboard=True, resize_keyboard=True)
     )
     return ASK_PHONE
 
@@ -815,8 +839,8 @@ async def get_phone(update: Update, context):
     text = update.message.text
     reservation_data = context.user_data['reservation_data']
 
-    if text.lower() == "отмена":
-        await update.message.reply_text("Бронирование отменено.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 В главное меню", callback_data="start")]]))
+    if text.lower() == "отмена бронирования":
+        await update.message.reply_text("❌ Бронирование отменено.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 В главное меню", callback_data="start")]]))
         context.user_data.pop('reservation_data', None)
         return ConversationHandler.END
 
@@ -835,7 +859,7 @@ async def get_phone(update: Update, context):
     await update.message.reply_text(
         "Есть ли у Вас какие-то особые пожелания или комментарии к бронированию? "
         "(например, стол у окна, празднование дня рождения)",
-        reply_markup=ReplyKeyboardMarkup([["Нет пожеланий", "День рождения","Стол у окна", "Отмена"]], one_time_keyboard=True, resize_keyboard=True)
+        reply_markup=ReplyKeyboardMarkup([["Нет пожеланий", "День рождения","Стол у окна", "Отмена бронирования"]], one_time_keyboard=True, resize_keyboard=True)
     )
     return ASK_WISHES
 
@@ -844,8 +868,8 @@ async def get_wishes(update: Update, context):
     text = update.message.text
     reservation_data = context.user_data['reservation_data']
 
-    if text.lower() == "отмена":
-        await update.message.reply_text("Бронирование отменено.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 В главное меню", callback_data="start")]]))
+    if text.lower() == "отмена бронирования":
+        await update.message.reply_text("❌ Бронирование отменено.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 В главное меню", callback_data="start")]]))
         context.user_data.pop('reservation_data', None)
         return ConversationHandler.END
     elif text.lower() == "нет пожеланий":
