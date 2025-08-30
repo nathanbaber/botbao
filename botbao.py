@@ -517,14 +517,14 @@ async def unknown(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await send_main_menu(update, context)
 
 
-def create_month_calendar(year, month):
+def create_month_calendar(year: int, month: int, min_date: datetime.date = None):
     cal = calendar.Calendar()
     month_days = cal.monthdatescalendar(year, month)
     keyboard = []
 
     # Устанавливаем min_date по умолчанию на сегодняшнюю дату, если не передана
     if min_date is None:
-        min_date = datetime.now().date()
+        min_date = date.today()
 
     # Заголовки дней недели
     keyboard.append([InlineKeyboardButton(day, callback_data="ignore") for day in ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]])
@@ -544,10 +544,11 @@ def create_month_calendar(year, month):
             else:
                 # Даты из предыдущего/следующего месяца, отображаемые в сетке календаря
                 row.append(InlineKeyboardButton(" ", callback_data="ignore")) # Пустые клетки для других месяцев
-        keyboard.append(row) # <-- ИСПРАВЛЕНО: Добавляем строку (неделю) после того, как она полностью сформирована
+        keyboard.append(row)
 
         # Кнопки для навигации
     first_day_of_current_month = date(year, month, 1)
+
     prev_month_date = (date(year, month, 1) - timedelta(days=1))
     next_month_date = (date(year, month, 1) + timedelta(days=31)).replace(day=1)
 
@@ -560,7 +561,7 @@ def create_month_calendar(year, month):
 
 
 # Функция бронирование
-async def start_reservation(update: Update, context) -> int:
+async def start_reservation(update: Update, context) -> InlineKeyboardMarkup:
     query = update.callback_query
     if query:
         await query.answer() # Подтверждаем обратный вызов (callback_query)
@@ -597,80 +598,83 @@ async def start_reservation(update: Update, context) -> int:
 
     return ASK_DATE
 
-async def calendar_callback_handler(update: Update, context) -> int:
+async def calendar_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
     data = query.data
 
-     # Определяем сегодняшнюю дату для валидации min_date
-    now_date = datetime.now().date()
-    max_reserv_date = now_date + timedelta(days=30) # Ваш лимит в 30 дней
-    
+    # Определяем сегодняшнюю дату для валидации min_date и max_date
+    now_date = date.today() # Используем date.today() для консистентности
+    MAX_RESERVATION_DAYS = 30 # Можно вынести в константу
+    max_reserv_date = now_date + timedelta(days=MAX_RESERVATION_DAYS)
 
     if data.startswith("date_"):
-        # Пользователь выбрал конкретную дату
         selected_date_str = data.split("_")[1]
-        selected_date = date.fromisoformat(selected_date_str)
-        
-        # Добавляем проверку min_date/max_date, как это было в DetailedTelegramCalendar
-        now_date = datetime.now().date()
-        max_reserv_date = now_date + timedelta(days=30) # Ваш лимит в 30 дней
-        
-        if data.startswith("date_"):
-            selected_date_str = data.split("_")[1]
+        try:
             selected_date = date.fromisoformat(selected_date_str)
-        
-            if selected_date < now_date or selected_date > max_reserv_date:
-                # Создаем календарь для текущего месяца с корректной min_date
-                new_calendar_markup = create_month_calendar(now_date.year, now_date.month, min_date=now_date)
-                current_keyboard_rows = list(new_calendar_markup.inline_keyboard)
-                current_keyboard_rows.append([InlineKeyboardButton("🔙 В главное меню", callback_data="start")])
-                final_markup = InlineKeyboardMarkup(current_keyboard_rows)
+        except ValueError:
+            await query.edit_message_text("Ошибка: Неверный формат даты.")
+            # Возвращаемся в то же состояние или завершаем
+            return ASK_DATE # или ConversationHandler.END
 
-                await query.edit_message_text(
-                    "Выбрана недопустимая дата. Пожалуйста, выберите дату в пределах ближайших 30 дней, не раньше сегодняшнего дня.",
-                    reply_markup=final_markup
-                )
-                return ASK_DATE
+        # Дополнительная валидация выбранной даты
+        if selected_date < now_date:
+            await query.edit_message_text("Выбрана прошедшая дата. Пожалуйста, выберите текущую или будущую дату.",
+                                          reply_markup=create_month_calendar(now_date.year, now_date.month, now_date))
+            return ASK_DATE # Остаемся в состоянии выбора даты
+        elif selected_date > max_reserv_date:
+            await query.edit_message_text(f"Вы не можете бронировать даты далее чем на {MAX_RESERVATION_DAYS} дней вперед.",
+                                          reply_markup=create_month_calendar(now_date.year, now_date.month, now_date))
+            return ASK_DATE # Остаемся в состоянии выбора даты
+
+        # Если дата валидна, сохраняем ее и переходим к следующему шагу (например, выбор времени)
+        context.user_data['reservation_data']['selected_date'] = selected_date
+        await query.edit_message_text(f"Вы выбрали: {selected_date.strftime('%d.%m.%Y')}. Теперь выберите время.")
         
-            context.user_data['reservation_data']['selected_date'] = selected_date
-            await query.edit_message_text(f"Вы выбрали: {selected_date.strftime('%d.%m.%Y')}. Теперь выберите время.")
-        # Переход к следующему состоянию, например, ASK_TIME
-            return ASK_TIME # Предполагается, что ASK_TIME — это другое состояние
+        # Здесь вы можете создать и отправить InlineKeyboardMarkup для выбора времени
+        # Например:
+        # time_keyboard = InlineKeyboardMarkup([
+        #     [InlineKeyboardButton("12:00", callback_data="time_1200"), InlineKeyboardButton("13:00", callback_data="time_1300")],
+        #     [InlineKeyboardButton("18:00", callback_data="time_1800"), InlineKeyboardButton("19:00", callback_data="time_1900")],
+        # ])
+        # await query.message.reply_text("Выберите время:", reply_markup=time_keyboard)
+        return ASK_TIME # Переходим в следующее состояние
 
     elif data.startswith("month_"):
-        # Пользователь нажал на кнопку навигации по месяцам (предыдущий/следующий месяц)
-        parts = data.split("_")
-        target_year = int(parts[1])
-        target_month = int(parts[2])
+        _, year_str, month_str = data.split("_")
+        try:
+            year, month = int(year_str), int(month_str)
+        except ValueError:
+            await query.edit_message_text("Ошибка: Неверный формат месяца.")
+            return ASK_DATE
+
+        # Заново генерируем календарь для нового месяца
+        calendar_markup = create_month_calendar(year, month, min_date=now_date)
         
-        # Генерируем календарь для нового месяца
-        new_calendar_markup = create_month_calendar(target_year, target_month)
-        
-        # Снова добавляем кнопку "Назад в главное меню"
-        current_keyboard_rows = new_calendar_markup.inline_keyboard
+        # Добавляем кнопку "В главное меню"
+        current_keyboard_rows = list(calendar_markup.inline_keyboard)
         current_keyboard_rows.append([InlineKeyboardButton("🔙 В главное меню", callback_data="start")])
         final_markup = InlineKeyboardMarkup(current_keyboard_rows)
-        
-        await query.edit_message_text(
-            "В какой день Вы планируете посетить наше бистро? Пожалуйста, выберите дату:",
-            reply_markup=final_markup
-        )
-        return ASK_DATE
-    
-    elif data == "ignore":
-        # Ничего не делаем для кнопок "ignore" (заголовки дней недели, пустые ячейки, метка текущего месяца)
-        pass 
+
+        await query.edit_message_reply_markup(reply_markup=final_markup)
+        return ASK_DATE # Остаемся в состоянии выбора даты
+
     elif data == "start":
-        # Обрабатываем "Назад в главное меню"
-        # Вероятно, вы захотите отправить главное меню и завершить разговор здесь
+        # Логика перехода в главное меню
         await query.edit_message_text("Возвращаемся в главное меню.")
-        # Пример: await send_main_menu(update, context) # Вызов вашей функции главного меню
-        # from telegram.ext import ConversationHandler # Раскомментируйте, если используете ConversationHandler
-        return ConversationHandler.END # Предполагается, что вы завершаете ConversationHandler
+        context.user_data['reservation_data'] = {} # Очищаем данные бронирования
+        # Здесь вы можете вызвать функцию для отображения главного меню
+        # await main_menu_function(update, context)
+        return -1 # Завершаем ConversationHandler или переходим в другое начальное состояние
 
-    return ASK_DATE # Остаемся в состоянии ASK_DATE, если конкретное действие не было предпринято
+    elif data == "ignore":
+        # Если нажата неактивная кнопка, просто ничего не делаем.
+        # query.answer() уже был вызван в начале функции.
+        return ASK_DATE # Остаемся в текущем состоянии
 
+    # Если callback_data не соответствует ни одному из ожидаемых шаблонов
+    await query.edit_message_text("Неизвестное действие.")
+    return ASK_DATE
 
 
 # Хендлер для обработки выбора даты из календаря
