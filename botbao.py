@@ -681,7 +681,7 @@ def generate_time_keyboard(selected_date: date):
 
     for hour in range(start_hour, end_hour + 1):
         for minute_step in [0, 30]: # Шаги по 30 минут
-            proposed_naive_dt = datetime.combine(date, datetime.min.replace(hour=hour, minute=minute_step).time())
+            proposed_naive_dt = datetime.combine(selected_date, datetime.min.replace(hour=hour, minute=minute_step).time())
             proposed_aware_dt_moscow = MOSCOW_TZ.localize(proposed_naive_dt)
             if proposed_aware_dt_moscow >= now_dt:
                 time_slots.append(proposed_naive_dt) # Добавляем "naive" время для отображения
