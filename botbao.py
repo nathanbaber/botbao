@@ -1,14 +1,16 @@
 ﻿import calendar
+from email import message
 import logging
 import json
 import os
 import re
+from socket import fromfd
 from xml.dom.minidom import NamedNodeMap
 from dotenv import load_dotenv; load_dotenv()
 load_dotenv()
 from datetime import datetime, timedelta, date, time 
 from uuid import uuid4
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
+from telegram import MessageId, Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, CallbackQueryHandler,
     ConversationHandler, ContextTypes, filters
@@ -65,6 +67,7 @@ USER_STATES_FILE = os.path.join(DATA_DIR, 'user_states.json')
 
 menu_data = {} # Глобальная переменная для хранения данных меню
 reviews_data = []
+
 
 try:
     with open(REVIEWS_FILE, 'r', encoding='utf-8') as f:
@@ -364,6 +367,30 @@ async def process_problem(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     )
     return ConversationHandler.END
 
+async def _send_chat_status_message(update: Update, context: ContextTypes.DEFAULT_TYPE, is_new_chat: bool):
+    """Отправляет сообщение пользователю о статусе чата (начало/уже активен)."""
+    user_id = str(update.effective_user.id)
+    chat_active_message = (
+        "Вы уже в активном чате со службой заботы о наших гостях. "
+        "Пожалуйста, дождитесь ответа или отправьте Ваше сообщение."
+    )
+    new_chat_message = (
+        "Вы подключены к службе заботы о наших гостях. Опишите Ваш вопрос, менеджер скоро ответит. "
+        "Чтобы завершить чат, нажмите '🚫 Завершить чат'."
+    )
+    reply_markup = InlineKeyboardMarkup([[InlineKeyboardButton("🚫 Завершить чат", callback_data="end_chat")]])
+
+    if is_new_chat:
+        if update.callback_query:
+            await update.callback_query.edit_message_text(new_chat_message, reply_markup=reply_markup)
+        else:
+            await update.message.reply_text(new_chat_message, reply_markup=reply_markup)
+    else: # Chat is already active
+        if update.callback_query:
+            await update.callback_query.edit_message_text(chat_active_message, reply_markup=reply_markup)
+        else:
+            await update.message.reply_text(chat_active_message, reply_markup=reply_markup)
+
 # --- Функции Live Chat (Служба поддержки) ---
 
 async def start_live_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -374,31 +401,13 @@ async def start_live_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     if query:
         await query.answer()
-        if user_id in user_states_data and user_states_data[user_id].get("state") == "chat_active":
-            await query.edit_message_text(
-                "Вы уже в активном чате со службой заботы о наших гостях. Пожалуйста, дождитесь ответа или отправьте Ваше сообщение.",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🚫 Завершить чат", callback_data="end_chat")]])
-            )
-            return LIVE_CHAT_USER
+    # Проверяем, если пользователь уже в активном чате
+    if user_id in user_states_data and user_states_data[user_id].get("state") == "chat_active":
+        await _send_chat_status_message(update, context, is_new_chat=False)
+        return LIVE_CHAT_USER
 
-        await query.edit_message_text(
-            "Вы подключены к службе заботы о наших гостях. Опишите Ваш вопрос, менеджер скоро ответит. "
-            "Чтобы завершить чат, нажмите '🚫 Завершить чат'.",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🚫 Завершить чат", callback_data="end_chat")]])
-        )
-    else: # Если команда вызвана напрямую
-         if user_id in user_states_data and user_states_data[user_id].get("state") == "chat_active":
-            await update.message.reply_text(
-                "Вы уже в активном чате со службой заботы о наших гостях. Пожалуйста, дождитесь ответа или отправьте Ваше сообщение.",
-                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🚫 Завершить чат", callback_data="end_chat")]])
-            )
-            return LIVE_CHAT_USER
-
-         await update.message.reply_text(
-            "Вы подключены к службе заботы о наших гостях. Опишите Ваш вопрос, менеджер скоро ответит. "
-            "Чтобы завершить чат, нажмите '🚫 Завершить чат'.",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🚫 Завершить чат", callback_data="end_chat")]])
-        )
+    # Если это новый чат
+    await _send_chat_status_message(update, context, is_new_chat=True)
 
     # Сохраняем состояние пользователя
     user_states_data[user_id] = {"state": "chat_active", "admin_chat_id": ADMIN_CHAT_ID}
@@ -423,10 +432,16 @@ async def handle_user_message_in_chat(update: Update, context: ContextTypes.DEFA
     # Проверяем, что пользователь действительно в режиме чата
     if user_id in user_states_data and user_states_data[user_id].get("state") == "chat_active":
         # Пересылаем сообщение админам
+         # Используем forward_message для сохранения типа сообщения (текст, фото, документ и т.д.)
+        await context.bot.forward_message(
+            chat_id=ADMIN_CHAT_ID,
+            from_chat_id=user.id,
+            message_id=update.message.message_id
+        )
+        # Дополнительное сообщение для админа с кнопкой завершения
         await context.bot.send_message(
             chat_id=ADMIN_CHAT_ID,
-            text=f"💬 Сообщение от {user.mention_html()}: \n\n"
-                 f"{message_text}",
+            text=f"⬆️ Сообщение выше от {user.mention_html()} (ID: {user.id}).",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🚫 Завершить этот чат", callback_data=f"admin_end_chat_{user_id}")]])
         )
@@ -444,28 +459,24 @@ async def end_live_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     user = update.effective_user
     user_id = str(user.id)
 
-    await query.answer()
+    if query:
+        await query.answer("Чат завершен.")
+        await query.edit_message_text("❌ Чат со службой заботы завершен. Если у Вас возникнут новые вопросы, Вы всегда можете начать новый чат.")
+    else:
+        await update.message.reply_text("❌ Чат со службой заботы завершен. Если у Вас возникнут новые вопросы, Вы всегда можете начать новый чат.")
 
     if user_id in user_states_data:
-        del user_states_data[user_id]
-        save_data(USER_STATES_FILE, user_states_data)
-
-        await query.edit_message_text(
-            "Чат с поддержкой завершен. Спасибо за обращение!",
-            reply_markup=get_main_keyboard()
-        )
-        # Уведомляем админов о завершении чата
+        # Уведомляем админа о завершении чата пользователем
         await context.bot.send_message(
             chat_id=ADMIN_CHAT_ID,
-            text=f"ℹ️ Пользователь {user.mention_html()} завершил чат.",
+            text=f"🚪 Пользователь {user.mention_html()} завершил чат.",
             parse_mode="HTML"
         )
-    else:
-        await query.edit_message_text(
-            "Чат не активен.",
-            reply_markup=get_main_keyboard()
-        )
+        del user_states_data[user_id] 
+        save_data(USER_STATES_FILE, user_states_data)
+
     return ConversationHandler.END
+
 
 async def admin_end_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Админ завершает чат по кнопке."""
