@@ -834,6 +834,8 @@ async def get_name(update: Update, context):
     )
     return ASK_PHONE
 
+RUSSIAN_MOBILE_PHONE_PATTERN = re.compile(r"^\+79\d{9}$")
+
 # 6. Получение телефона
 async def get_phone(update: Update, context):
     text = update.message.text
@@ -844,18 +846,48 @@ async def get_phone(update: Update, context):
         context.user_data.pop('reservation_data', None)
         return ConversationHandler.END
 
-    # Простая проверка на то, что это похоже на телефонный номер
-    if not re.match(r"^\+?\d{10,15}$", text.replace(" ", "").replace("-", "")):
-        await update.message.reply_text("Пожалуйста, введи корректный номер телефона (например, +79XXXXXXXXX).")
-        return ASK_PHONE
-    else:
-        # Стандартизируем номер перед сохранением
-        standardized_phone = text.replace(" ", "").replace("-", "")
-        # Опционально: если номер начинается с 8, меняем на +7 (для России)
-        if standardized_phone.startswith("8") and len(standardized_phone) == 11:
-            standardized_phone = "+7" + standardized_phone[1:]
+    cleaned_phone = text.strip().replace(" ", "").replace("-", "").replace("(", "").replace(")", "")
+    standardized_phone = ""
 
+    # 2. Стандартизация префикса и начальная проверка длины
+    if cleaned_phone.startswith("8"):
+        # Если номер начинается с 8 и имеет общую длину 11 цифр (8 + 10 цифр)
+        if len(cleaned_phone) == 11:
+            standardized_phone = "+7" + cleaned_phone[1:] # Меняем 8 на +7
+        else:
+            # Если начинается с 8, но не 11 цифр, это некорректно для мобильного
+            pass # standardized_phone останется пустым
+    elif cleaned_phone.startswith("+7"):
+        # Если номер уже начинается с +7 и имеет общую длину 12 символов (+7 + 10 цифр)
+        if len(cleaned_phone) == 12:
+            standardized_phone = cleaned_phone
+        else:
+            # Если начинается с +7, но не 12 символов, это некорректно
+            pass
+    elif cleaned_phone.startswith("9"):
+        # Если номер начинается с 9 и имеет 10 цифр (9XXXXXXXXX),
+        # предполагаем, что пропущен +7
+        if len(cleaned_phone) == 10:
+            standardized_phone = "+7" + cleaned_phone
+        else:
+            pass # Пропускаем, если не 10 цифр
+    else:
+        # Все остальные варианты (например, номера без префикса, слишком короткие/длинные)
+        pass # standardized_phone останется пустым
+
+    # 3. Финальная проверка стандартизированного номера с помощью регулярного выражения
+    if not RUSSIAN_MOBILE_PHONE_PATTERN.fullmatch(standardized_phone):
+        await update.message.reply_text(
+            "Пожалуйста, введите корректный мобильный номер. "
+            "Номер должен содержать 11 цифр и начинаться с +7 или 8 "
+            "(например, +79XXXXXXXXX или 89XXXXXXXXX)."
+        )
+        return ASK_PHONE # Возвращаемся в это же состояние, чтобы запросить номер снова
+
+    
     reservation_data['phone'] = standardized_phone
+    context.user_data['reservation_data'] = reservation_data # Обновляем user_data
+
     await update.message.reply_text(
         "Есть ли у Вас какие-то особые пожелания или комментарии к бронированию? "
         "(например, стол у окна, празднование дня рождения)",
