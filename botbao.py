@@ -671,7 +671,6 @@ def generate_time_keyboard(selected_date: date):
 
     keyboard = []
     now_dt = datetime.now() # Текущая дата и время
-    current_time = now_dt.time()
     
     #диапазон работы заведения
     start_hour = 11
@@ -684,7 +683,7 @@ def generate_time_keyboard(selected_date: date):
             slot_time = time(hour, minute_step)
             slot_full_dt = datetime.combine(selected_date, slot_time)
             # Если дата "сегодня" и время слота уже прошло, пропускаем его
-            if slot_full_dt < current_time - timedelta(minutes=5): # Даем себе 5 минут "форы"
+            if slot_full_dt < now_dt - timedelta(minutes=5): # Даем себе 5 минут "форы"
                 time_slots.append(slot_time)
 
     # Размещаем кнопки времени по 4 в ряд
