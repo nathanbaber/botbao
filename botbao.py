@@ -19,6 +19,7 @@ from telegram.error import BadRequest
 from telegram_bot_calendar import DetailedTelegramCalendar, LSTEP
 import html
 import pytz 
+from html import escape
 
 MOSCOW_TZ = pytz.timezone('Europe/Moscow')
 
@@ -431,18 +432,86 @@ async def handle_user_message_in_chat(update: Update, context: ContextTypes.DEFA
 
     # Проверяем, что пользователь действительно в режиме чата
     if user_id in user_states_data and user_states_data[user_id].get("state") == "chat_active":
-        # Пересылаем сообщение админам
-        await context.bot.send_message(
-            chat_id=ADMIN_CHAT_ID,
-            text=f"💬 Сообщение от {user.mention_html()}: \n\n"
-                 f"{message_text}",
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🚫 Завершить этот чат", callback_data=f"admin_end_chat_{user_id}")]])
+        admin_message_prefix = f"💬 Сообщение от {user.mention_html()} (user_id: Ⓝ{user_id}Ⓝ):\n\n"
+        reply_markup_for_admin = InlineKeyboardMarkup(
+            [[InlineKeyboardButton("🚫 Завершить этот чат", callback_data=f"admin_end_chat_{user_id}")]]
         )
+
+        message = update.message
+
+        if message.text:
+            # Если это текстовое сообщение
+            safe_text = escape(message.text) # Экранируем текст от HTML инъекций
+            await context.bot.send_message(
+                chat_id=ADMIN_CHAT_ID,
+                text=f"{admin_message_prefix}{safe_text}",
+                parse_mode="HTML",
+                reply_markup=reply_markup_for_admin
+            )
+        elif message.photo:
+            # Если это фото
+            # Получаем самое большое разрешение фото (последний элемент в списке photo)
+            photo_file_id = message.photo[-1].file_id
+            caption_text = message.caption if message.caption else ""
+            safe_caption = escape(caption_text) # Экранируем подпись
+
+            await context.bot.send_photo(
+                chat_id=ADMIN_CHAT_ID,
+                photo=photo_file_id,
+                caption=f"{admin_message_prefix}{safe_caption}",
+                parse_mode="HTML",
+                reply_markup=reply_markup_for_admin
+            )
+        elif message.video:
+            # Если это видео
+            video_file_id = message.video.file_id
+            caption_text = message.caption if message.caption else ""
+            safe_caption = escape(caption_text) # Экранируем подпись
+
+            await context.bot.send_video(
+                chat_id=ADMIN_CHAT_ID,
+                video=video_file_id,
+                caption=f"{admin_message_prefix}{safe_caption}",
+                parse_mode="HTML",
+                reply_markup=reply_markup_for_admin
+            )
+        elif message.voice:
+            # Если это голосовое сообщение
+            voice_file_id = message.voice.file_id
+            caption_text = message.caption if message.caption else "" # Голосовые тоже могут иметь подпись
+            safe_caption = escape(caption_text) # Экранируем подпись
+
+            await context.bot.send_voice(
+                chat_id=ADMIN_CHAT_ID,
+                voice=voice_file_id,
+                caption=f"{admin_message_prefix}{safe_caption}",
+                parse_mode="HTML",
+                reply_markup=reply_markup_for_admin
+            )
+        elif message.document:
+            file_id = message.document.file_id
+            caption_text = message.caption if message.caption else ""
+            safe_caption = escape(caption_text)
+            await context.bot.send_document(
+                chat_id=ADMIN_CHAT_ID,
+                document=file_id,
+                caption=f"{admin_message_prefix}{safe_caption}",
+                parse_mode="HTML",
+                reply_markup=reply_markup_for_admin
+            )
+        else:
+            # Если сообщение неизвестного или неподдерживаемого типа
+            await update.message.reply_text("Извините, этот тип сообщения пока не поддерживается в чате с менеджером.")
+            return LIVE_CHAT_USER # Остаемся в чате
+
         await update.message.reply_text("Ваше сообщение отправлено менеджеру.")
         return LIVE_CHAT_USER
     else:
         # Если почему-то не в чате, но сообщение пришло сюда
+        # Очищаем некорректное состояние, если оно было
+        if "state" in context.user_data:
+            del context.user_data["state"]
+
         await send_main_menu(update, context, "Не удалось определить ваше состояние. Пожалуйста, попробуйте еще раз.")
         return ConversationHandler.END
 
@@ -1069,7 +1138,7 @@ def main() -> None:
         entry_points=[CallbackQueryHandler(start_live_chat, pattern="^support$")],
         states={
             LIVE_CHAT_USER: [
-                MessageHandler(filters.TEXT & ~filters.COMMAND, handle_user_message_in_chat),
+                MessageHandler(filters.ALL & ~filters.COMMAND, handle_user_message_in_chat),
                 CallbackQueryHandler(end_live_chat, pattern="^end_chat$")
             ]
         },
