@@ -1274,10 +1274,10 @@ def main() -> None:
         entry_points=[CallbackQueryHandler(start_review, pattern="^start_review$"),
                       CommandHandler("review", start_review)],
         states={
-            REVIEW_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_review)],
+            REVIEW_TEXT: [MessageHandler(filters.ALL & ~filters.COMMAND, process_review)],
         },
         fallbacks=[CommandHandler("cancel", cancel_conversation),
-                   MessageHandler(filters.ALL & ~filters.COMMAND, cancel_conversation),
+                   MessageHandler(filters.TEXT & ~filters.COMMAND, cancel_conversation),
                    CallbackQueryHandler(send_main_menu, pattern="^start$"),
                    CommandHandler("start", start)],
         allow_reentry=True
@@ -1289,10 +1289,10 @@ def main() -> None:
         entry_points=[CallbackQueryHandler(start_problem, pattern="^start_problem$"),
                       CommandHandler("problem", start_problem)],
         states={
-            PROBLEM_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_problem)],
+            PROBLEM_TEXT: [MessageHandler(filters.ALL & ~filters.COMMAND, process_problem)],
         },
         fallbacks=[CommandHandler("cancel", cancel_conversation),
-                   MessageHandler(filters.ALL & ~filters.COMMAND, cancel_conversation),
+                   MessageHandler(filters.TEXT & ~filters.COMMAND, cancel_conversation),
                    CallbackQueryHandler(send_main_menu, pattern="^start$"),
                    CommandHandler("start", start)]
     )
