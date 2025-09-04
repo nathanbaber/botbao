@@ -426,31 +426,111 @@ async def start_problem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     return PROBLEM_TEXT
 
 async def process_problem(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Обрабатывает полученное описание проблемы."""
+    """
+    Обрабатывает полученное описание проблемы, включая текст, фото, видео и голосовые сообщения.
+    Сохраняет информацию о проблеме и уведомляет админов.
+    """
     user = update.effective_user
-    problem_text = update.message.text
+    message = update.message # Сокращаем доступ к update.message
 
     problem_entry = {
         "user_id": user.id,
         "username": user.username if user.username else user.full_name,
         "date": datetime.now().isoformat(),
-        "text": problem_text
+        "type": "text", # По умолчанию, будет изменено при наличии медиа
+        "text": None, # Текст проблемы или подпись к медиа
+        "file_id": None, # Для медиафайлов
+        "file_type": None # Тип медиа (photo, video, voice, document)
     }
+
+    admin_notification_text_prefix = f"🚨 НОВАЯ ПРОБЛЕМА ОТ ГОСТЯ: \n\nОт: {user.mention_html()} (ID: {user.id} )\n"
+    
+    # --- Определяем тип сообщения и сохраняем данные ---
+    if message.text:
+        problem_entry["text"] = message.text
+        problem_entry["type"] = "text"
+        admin_notification_text = f"{admin_notification_text_prefix}Проблема: {escape(message.text)}" # Экранируем для админов
+
+        # Отправляем сообщение админам
+        await context.bot.send_message(
+            chat_id=ADMIN_CHAT_ID,
+            text=admin_notification_text,
+            parse_mode="HTML"
+        )
+
+    elif message.photo:
+        photo_file_id = message.photo[-1].file_id # Самое большое разрешение
+        problem_entry["file_id"] = photo_file_id
+        problem_entry["file_type"] = "photo"
+        problem_entry["type"] = "media"
+        if message.caption:
+            problem_entry["text"] = message.caption
+            admin_notification_text = f"{admin_notification_text_prefix}Подпись к фото: {escape(message.caption)}"
+        else:
+            admin_notification_text = f"{admin_notification_text_prefix}Проблема (фото без подписи)"
+
+        # Пересылаем фото админам
+        await context.bot.send_photo(
+            chat_id=ADMIN_CHAT_ID,
+            photo=photo_file_id,
+            caption=admin_notification_text,
+            parse_mode="HTML"
+        )
+
+    elif message.video:
+        video_file_id = message.video.file_id
+        problem_entry["file_id"] = video_file_id
+        problem_entry["file_type"] = "video"
+        problem_entry["type"] = "media"
+        if message.caption:
+            problem_entry["text"] = message.caption
+            admin_notification_text = f"{admin_notification_text_prefix}Подпись к видео: {escape(message.caption)}"
+        else:
+            admin_notification_text = f"{admin_notification_text_prefix}Проблема (видео без подписи)"
+
+        # Пересылаем видео админам
+        await context.bot.send_video(
+            chat_id=ADMIN_CHAT_ID,video=video_file_id,
+            caption=admin_notification_text,
+            parse_mode="HTML"
+        )
+
+    elif message.voice:
+        voice_file_id = message.voice.file_id
+        problem_entry["file_id"] = voice_file_id
+        problem_entry["file_type"] = "voice"
+        problem_entry["type"] = "media"
+        if message.caption: # Голосовые сообщения тоже могут иметь подпись
+            problem_entry["text"] = message.caption
+            admin_notification_text = f"{admin_notification_text_prefix}Подпись к голосовому: {escape(message.caption)}"
+        else:
+            admin_notification_text = f"{admin_notification_text_prefix}Проблема (голосовое без подписи)"
+
+        # Пересылаем голосовое админам
+        await context.bot.send_voice(
+            chat_id=ADMIN_CHAT_ID,
+            voice=voice_file_id,
+            caption=admin_notification_text,
+            parse_mode="HTML"
+        )
+    # Можно добавить обработку document, audio и других типов, если нужно
+    else:
+        # Если пришло сообщение неподдерживаемого типа
+        await update.message.reply_text(
+           "Извините, этот тип сообщения не поддерживается для описания проблемы. Пожалуйста, отправьте текст, фото, видео или голосовое сообщение.",
+           reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Отменить проблему", callback_data="start")]])
+        )
+        return ConversationHandler.END # Завершаем, так как проблема не получена
+
+    # --- Сохраняем проблему и отвечаем пользователю ---
     problems_data.append(problem_entry)
     save_data(PROBLEMS_FILE, problems_data)
 
     await update.message.reply_text(
-        "Спасибо за сообщение. Мы уже работаем над решением!",
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 В главное меню", callback_data="start")]])
+       "Спасибо за сообщение. Мы уже работаем над решением!",
+       reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 В главное меню", callback_data="start")]])
     )
-    # Уведомляем админов
-    await context.bot.send_message(
-        chat_id=ADMIN_CHAT_ID,
-        text=f"🚨 НОВАЯ ПРОБЛЕМА ОТ ГОСТЯ: \n\n"
-             f"От: {user.mention_html()} (ID: {user.id})\n"
-             f"Проблема: {problem_text}",
-        parse_mode="HTML"
-    )
+    
     return ConversationHandler.END
 
 async def _send_chat_status_message(update: Update, context: ContextTypes.DEFAULT_TYPE, is_new_chat: bool):
@@ -1197,7 +1277,7 @@ def main() -> None:
             REVIEW_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_review)],
         },
         fallbacks=[CommandHandler("cancel", cancel_conversation),
-                   MessageHandler(filters.TEXT & ~filters.COMMAND, cancel_conversation),
+                   MessageHandler(filters.ALL & ~filters.COMMAND, cancel_conversation),
                    CallbackQueryHandler(send_main_menu, pattern="^start$"),
                    CommandHandler("start", start)],
         allow_reentry=True
@@ -1212,7 +1292,7 @@ def main() -> None:
             PROBLEM_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, process_problem)],
         },
         fallbacks=[CommandHandler("cancel", cancel_conversation),
-                   MessageHandler(filters.TEXT & ~filters.COMMAND, cancel_conversation),
+                   MessageHandler(filters.ALL & ~filters.COMMAND, cancel_conversation),
                    CallbackQueryHandler(send_main_menu, pattern="^start$"),
                    CommandHandler("start", start)]
     )
