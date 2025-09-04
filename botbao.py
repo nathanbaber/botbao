@@ -279,15 +279,107 @@ async def start_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     return REVIEW_TEXT
 
 async def process_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    """Обрабатывает полученный отзыв."""
+    """
+    Обрабатывает полученный отзыв, включая текст, фото, видео и голосовые сообщения.
+    Сохраняет информацию о отзыве и уведомляет админов.
+    """
     user = update.effective_user
-    review_text = update.message.text
+    message = update.message # Сокращаем доступ к update.message
+
     review_entry = {
         "user_id": user.id,
         "username": user.username if user.username else user.full_name,
         "date": datetime.now().isoformat(),
-        "text": review_text
+        "type": "text", # По умолчанию, будет изменено при наличии медиа
+        "text": None, # Текст отзыва или подпись к медиа
+        "file_id": None, # Для медиафайлов
+        "file_type": None # Тип медиа (photo, video, voice, document)
     }
+
+    admin_notification_text = f"📢 НОВЫЙ ОТЗЫВ ОТ ГОСТЯ: \n\nОт: {user.mention_html()} (ID: {user.id} )\n"
+    
+    # --- Определяем тип сообщения и сохраняем данные ---
+    if message.text:
+        review_entry["text"] = message.text
+        review_entry["type"] = "text"
+        admin_notification_text += f"Текст отзыва: {escape(message.text)}" # Экранируем для админов
+
+        # Отправляем сообщение админам
+        await context.bot.send_message(
+            chat_id=ADMIN_CHAT_ID,
+            text=admin_notification_text,
+            parse_mode="HTML"
+        )
+
+    elif message.photo:
+        photo_file_id = message.photo[-1].file_id # Самое большое разрешение
+        review_entry["file_id"] = photo_file_id
+        review_entry["file_type"] = "photo"
+        review_entry["type"] = "media"
+        if message.caption:
+            review_entry["text"] = message.caption
+            admin_notification_text += f"Подпись: {escape(message.caption)}"
+        else:
+            admin_notification_text += "Без подписи"
+
+        # Пересылаем фото админам
+        await context.bot.send_photo(
+            chat_id=ADMIN_CHAT_ID,
+            photo=photo_file_id,
+            caption=admin_notification_text,
+            parse_mode="HTML"
+        )
+
+    elif message.video:
+        video_file_id = message.video.file_id
+        review_entry["file_id"] = video_file_id
+        review_entry["file_type"] = "video"
+        review_entry["type"] = "media"
+        if message.caption:
+            review_entry["text"] = message.caption
+            admin_notification_text += f"Подпись: {escape(message.caption)}"
+        else:
+            admin_notification_text += "Без подписи"
+
+        # Пересылаем видео админам
+        await context.bot.send_video(
+            chat_id=ADMIN_CHAT_ID,
+            video=video_file_id,
+            caption=admin_notification_text,parse_mode="HTML"
+        )
+
+    elif message.voice:
+        voice_file_id = message.voice.file_id
+        review_entry["file_id"] = voice_file_id
+        review_entry["file_type"] = "voice"
+        review_entry["type"] = "media"
+        if message.caption: # Голосовые сообщения тоже могут иметь подпись
+            review_entry["text"] = message.caption
+            admin_notification_text += f"Подпись: {escape(message.caption)}"
+        else:
+            admin_notification_text += "Без подписи"
+
+        # Пересылаем голосовое админам
+        await context.bot.send_voice(
+            chat_id=ADMIN_CHAT_ID,
+            voice=voice_file_id,
+            caption=admin_notification_text, # Подпись у голосового может быть короткой
+            parse_mode="HTML"
+        )
+    # Можно добавить обработку document, audio и других типов, если нужно
+    # elif message.document:
+    #     # ...
+    # elif message.audio:
+    #     # ...
+    else:
+        # Если пришло сообщение неподдерживаемого типа
+        await update.message.reply_text(
+           "Извините, этот тип сообщения не поддерживается для отзыва. Пожалуйста, отправьте текст, фото, видео или голосовое сообщение.",
+           reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 Отменить отзыв", callback_data="start")]])
+        )
+        return ConversationHandler.END # Завершаем, так как отзыв не получен
+
+    # --- Сохраняем отзыв и отвечаем пользователю ---
     reviews_data.append(review_entry)
     save_data(REVIEWS_FILE, reviews_data)
 
@@ -295,14 +387,7 @@ async def process_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
        "Спасибо за Ваш отзыв! Мы стараемся для Вас!",
        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 В главное меню", callback_data="start")]])
     )
-    # Уведомляем админов
-    await context.bot.send_message(
-        chat_id=ADMIN_CHAT_ID,
-        text=f"📢 НОВЫЙ ОТЗЫВ ОТ ГОСТЯ: \n\n"
-            f"От: {user.mention_html()} (ID: {user.id} )\n"
-            f"Отзыв: {review_text}",
-        parse_mode="HTML"
-    )
+    
     return ConversationHandler.END
 
 async def cancel_conversation(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
