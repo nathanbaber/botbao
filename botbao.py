@@ -609,14 +609,15 @@ async def handle_user_message_in_chat(update: Update, context: ContextTypes.DEFA
         )
 
         message = update.message
+        user_info_tag = f"<!--user_id:{user.id}-->"
+        escaped_user_info_tag = html.escape(user_info_tag)
 
         if message.text:
             # Если это текстовое сообщение
             safe_text = escape(message.text) # Экранируем текст от HTML инъекций
             await context.bot.send_message(
                 chat_id=ADMIN_CHAT_ID,
-                text=f"{admin_message_prefix}{safe_text}"
-                f"\n\n<!--user_id:{user_id}-->", # Скрытый ID для ответа
+                text=f"{escaped_user_info_tag}{admin_message_prefix}{safe_text}",
                 parse_mode="HTML",
                 reply_markup=reply_markup_for_admin,
                 disable_web_page_preview=True # Отключаем превью ссылок
@@ -631,7 +632,7 @@ async def handle_user_message_in_chat(update: Update, context: ContextTypes.DEFA
             await context.bot.send_photo(
                 chat_id=ADMIN_CHAT_ID,
                 photo=photo_file_id,
-                caption=f"{admin_message_prefix}{safe_caption}",
+                caption=f"{escaped_user_info_tag}{admin_message_prefix}{safe_text}",
                 parse_mode="HTML",
                 reply_markup=reply_markup_for_admin,
                 disable_web_page_preview=True # Отключаем превью ссылок
@@ -645,7 +646,7 @@ async def handle_user_message_in_chat(update: Update, context: ContextTypes.DEFA
             await context.bot.send_video(
                 chat_id=ADMIN_CHAT_ID,
                 video=video_file_id,
-                caption=f"{admin_message_prefix}{safe_caption}",
+                caption=f"{escaped_user_info_tag}{admin_message_prefix}{safe_text}",
                 parse_mode="HTML",
                 reply_markup=reply_markup_for_admin,
                 disable_web_page_preview=True # Отключаем превью ссылок
@@ -659,7 +660,7 @@ async def handle_user_message_in_chat(update: Update, context: ContextTypes.DEFA
             await context.bot.send_voice(
                 chat_id=ADMIN_CHAT_ID,
                 voice=voice_file_id,
-                caption=f"{admin_message_prefix}{safe_caption}",
+                caption=f"{escaped_user_info_tag}{admin_message_prefix}{safe_text}",
                 parse_mode="HTML",
                 reply_markup=reply_markup_for_admin,
                 disable_web_page_preview=True # Отключаем превью ссылок
@@ -671,7 +672,7 @@ async def handle_user_message_in_chat(update: Update, context: ContextTypes.DEFA
             await context.bot.send_document(
                 chat_id=ADMIN_CHAT_ID,
                 document=file_id,
-                caption=f"{admin_message_prefix}{safe_caption}",
+                caption=f"{escaped_user_info_tag}{admin_message_prefix}{safe_text}",s
                 parse_mode="HTML",
                 reply_markup=reply_markup_for_admin,
                 disable_web_page_preview=True # Отключаем превью ссылок
