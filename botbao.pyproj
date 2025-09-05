@@ -29,8 +29,10 @@
   <ItemGroup>
     <Content Include="data\faq.json" />
     <Content Include="data\menu.json" />
+    <Content Include="data\messages.json" />
     <Content Include="data\problems.json" />
     <Content Include="data\reviews.json" />
+    <Content Include="data\users.json" />
     <Content Include="data\user_states.json" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />

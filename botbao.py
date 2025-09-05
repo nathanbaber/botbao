@@ -3,13 +3,13 @@ from email import message
 import logging
 import json
 import os
+import threading
 import re
 from socket import fromfd
 from xml.dom.minidom import NamedNodeMap
 from dotenv import load_dotenv; load_dotenv()
 load_dotenv()
 from datetime import datetime, timedelta, date, time 
-from uuid import uuid4
 from telegram import MessageId, Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, CallbackQueryHandler,
@@ -27,6 +27,9 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+DATA_LOCK = threading.Lock() # Для безопасной работы с файлом при многопоточности
+
 
 # --- КОНФИГУРАЦИЯ БОТА ---
 BOT_TOKEN = os.getenv("BOT_TOKEN")
@@ -64,17 +67,8 @@ FAQ_FILE = os.path.join(DATA_DIR, 'faq.json')
 REVIEWS_FILE = os.path.join(DATA_DIR, 'reviews.json')
 PROBLEMS_FILE = os.path.join(DATA_DIR, 'problems.json')
 USER_STATES_FILE = os.path.join(DATA_DIR, 'user_states.json')
-
-menu_data = {} # Глобальная переменная для хранения данных меню
-reviews_data = []
-
-
-try:
-    with open(REVIEWS_FILE, 'r', encoding='utf-8') as f:
-        reviews_data = json.load(f)
-except (FileNotFoundError, json.JSONDecodeError):
-    reviews_data = []
-    logger.info("Файл отзывов не найден или пуст, инициализирована новая структура.")
+USERS_FILE = os.path.join(DATA_DIR, 'users.json') # Для логирования уникальных пользователей
+MESSAGES_FILE = os.path.join(DATA_DIR, 'messages.json') # Для логирования всех сообщений
 
 # Убедимся, что директория data существует
 os.makedirs(DATA_DIR, exist_ok=True)
@@ -91,28 +85,143 @@ async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("Пожалуйста, отправьте фотографию или файл.")
 
-def load_data(filepath, default_value={}):
-    if not os.path.exists(filepath):
-        with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(default_value, f, ensure_ascii=False, indent=4)
-        return default_value
-    try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except json.JSONDecodeError:
-        logger.error(f"Error decoding JSON from {filepath}. Returning default value.")
-        return default_value
+def load_data(filepath, default_value=None):
+    """
+    Загружает данные из JSON-файла.
+    Если файл не существует, создает его с default_value.
+    Использует DATA_LOCK для потокобезопасности.
+    """
+    if default_value is None:
+        if filepath == USERS_FILE:
+            default_value = {} # Users хранятся как словарь {user_id: user_info}
+        elif filepath == MESSAGES_FILE or filepath == REVIEWS_FILE or filepath == PROBLEMS_FILE:
+            default_value = [] # Сообщения, отзывы, проблемы хранятся как список
+        else:
+            default_value = {} # Для menu, faq, user_states по умолчанию словарь
+
+    with DATA_LOCK: # Захватываем блокировку перед чтением/записью
+        if not os.path.exists(filepath):
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(default_value, f, ensure_ascii=False, indent=4)
+            logger.info(f"Файл {filepath} не найден, инициализирован с новым значением.")
+            return default_value
+        try:
+            with open(filepath, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            logger.error(f"Ошибка чтения JSON из файла {filepath}. Файл пуст или поврежден. Возвращено значение по умолчанию.")
+            # Если файл поврежден, перезапишем его дефолтным значением при сохранении
+            return default_value
+        except Exception as e:
+            logger.error(f"Неизвестная ошибка при загрузке данных из {filepath}: {e}")
+            return default_value
 
 def save_data(filepath, data):
-    with open(filepath, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+    """
+    Сохраняет данные в JSON-файл.
+    Использует DATA_LOCK для потокобезопасности.
+    """
+    with DATA_LOCK: # Захватываем блокировку перед записью
+        try:
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=4)
+        except Exception as e:
+            logger.error(f"Ошибка при сохранении данных в файл {filepath}: {e}")
 
-# Загружаем данные при старте бота
+# --- Глобальные переменные для данных, которые загружаются при старте и редко изменяются ---
+# Для часто изменяемых данных (логи, отзывы, проблемы), мы будем загружать, обновлять и сохранять их в каждом обработчике.
 menu_data = load_data(MENU_FILE)
 faq_data = load_data(FAQ_FILE)
+user_states_data = load_data(USER_STATES_FILE) # Для активных чатов поддержки (если не используете Persistence)
 reviews_data = load_data(REVIEWS_FILE, default_value=[])
 problems_data = load_data(PROBLEMS_FILE, default_value=[])
-user_states_data = load_data(USER_STATES_FILE) # Для активных чатов поддержки
+
+# --- Функции логирования ---
+
+def _log_user(user):
+    """Логирует информацию о пользователе, если он еще не зарегистрирован, или обновляет 'last_seen'."""
+    users = load_data(USERS_FILE)
+    user_id_str = str(user.id)
+    now = datetime.now().isoformat()
+
+    user_mention_link = f"tg://user?id={user.id}"
+    if user.username:
+        user_mention_link = f"@{user.username}"
+
+    if user_id_str not in users:
+        users[user_id_str] = {
+            "telegram_id": user.id,
+            "username": user.username,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "profile_link": user_mention_link,
+            "first_seen": now,
+            "last_seen": now
+        }
+        logger.info(f"Новый пользователь зарегистрирован: {user_id_str} ({user.username or user.full_name})")
+    else:
+        users[user_id_str]["last_seen"] = now
+        # Можно обновить другие поля, если они могли измениться (например, username)
+        users[user_id_str]["username"] = user.username
+        users[user_id_str]["first_name"] = user.first_name
+        users[user_id_str]["last_name"] = user.last_name
+        users[user_id_str]["profile_link"] = user_mention_link # Обновляем на случай изменения username
+
+    save_data(USERS_FILE, users)
+
+def _log_message(update: Update):
+    """Логирует все текстовые сообщения от пользователей."""
+    user = update.effective_user
+    message = update.effective_message
+
+    if message and message.text:
+        messages = load_data(MESSAGES_FILE, default_value=[])
+        message_entry = {
+            "message_id": message.message_id,
+            "user_id": user.id,
+            "username": user.username, # Добавлено для удобства поиска
+            "text": message.text,
+            "timestamp": datetime.now().isoformat(),
+            "chat_id": update.effective_chat.id
+        }
+        messages.append(message_entry)
+        save_data(MESSAGES_FILE, messages)
+        logger.info(f"Сообщение от {user.id} ({user.username or user.full_name}): {message.text}")
+
+def _log_review(update: Update, review_text: str):
+    """Логирует отзыв пользователя."""
+    user = update.effective_user
+    reviews = load_data(REVIEWS_FILE, default_value=[])
+    review_entry = {
+        "user_id": user.id,
+        "username": user.username, # Добавлено
+        "first_name": user.first_name, # Добавлено
+        "last_name": user.last_name, # Добавлено
+        "review_text": review_text,
+        "timestamp": datetime.now().isoformat(),
+        "chat_id": update.effective_chat.id
+    }
+    reviews.append(review_entry) 
+    save_data(REVIEWS_FILE, reviews)
+    logger.info(f"Пользователь {user.id} ({user.username or user.full_name}) оставил отзыв: {review_text}")
+
+def _log_problem(update: Update, problem_text: str):
+    """Логирует сообщение о проблеме от пользователя."""
+    user = update.effective_user
+    problems = load_data(PROBLEMS_FILE, default_value=[])
+    problem_entry = {
+        "user_id": user.id,
+        "username": user.username, # Добавлено
+        "first_name": user.first_name, # Добавлено
+        "last_name": user.last_name, # Добавлено
+        "problem_text": problem_text,
+        "timestamp": datetime.now().isoformat(),
+        "chat_id": update.effective_chat.id
+    }
+    problems.append(problem_entry)
+    save_data(PROBLEMS_FILE, problems)
+    logger.info(f"Пользователь {user.id} ({user.username or user.full_name}) сообщил о проблеме: {problem_text}")
+
 
 # --- Вспомогательные функции ---
 
@@ -157,9 +266,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         "Чем мы можем Вам помочь?",
         reply_markup=get_main_keyboard()
     )
+    _log_user(user)
+    _log_message(update) # Логируем само сообщение /start
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Обработчик команды /help."""
+    user = update.effective_user
+
     await update.message.reply_text(
         "Мы можем:\n"
         "- Показать Вам меню;\n"
@@ -170,11 +283,14 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "Воспользуйтесь кнопками ниже:",
         reply_markup=get_main_keyboard()
     )
+    _log_user(user)
+    _log_message(update) # Логируем само сообщение /help
 
 # --- Функции меню ---
 
 async def show_menu_categories(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Показывает категории меню."""
+    user = update.effective_user
     query = update.callback_query
     await query.answer()
 
@@ -185,10 +301,13 @@ async def show_menu_categories(update: Update, context: ContextTypes.DEFAULT_TYP
 
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(text="Выберите категорию меню:", reply_markup=reply_markup)
+    _log_user(user)
+    _log_message(update) # Логируем само сообщение /menu
     return MENU_CATEGORY
 
 async def show_menu_items(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Показывает блюда в выбранной категории."""
+    user = update.effective_user
     query = update.callback_query
     await query.answer()
     category = query.data.replace("menu_cat_", "")
@@ -212,6 +331,8 @@ async def show_menu_items(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         reply_markup=reply_markup,
         parse_mode="Markdown"
     )
+    _log_user(user)
+    _log_message(update) # Логируем само сообщение /menu
     return MENU_ITEM
 
 
@@ -219,6 +340,7 @@ async def show_menu_items(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 async def show_faq_questions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Показывает список вопросов FAQ."""
+    user = update.effective_user
     query = update.callback_query
     await query.answer()
 
@@ -229,10 +351,13 @@ async def show_faq_questions(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     reply_markup = InlineKeyboardMarkup(keyboard)
     await query.edit_message_text(text="Выберите вопрос, чтобы узнать ответ:", reply_markup=reply_markup)
+    _log_user(user)
+    _log_message(update) # Логируем само сообщение /faq
     return FAQ_QUESTION
 
 async def show_faq_answer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Показывает ответ на выбранный вопрос FAQ."""
+    user = update.effective_user
     query = update.callback_query
     await query.answer()
     index = int(query.data.replace("faq_q_", ""))
@@ -252,12 +377,15 @@ async def show_faq_answer(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         reply_markup=reply_markup,
         parse_mode="Markdown"
     )
+    _log_user(user)
+    _log_message(update) # Логируем само сообщение /faq_ques
     return FAQ_QUESTION
 
     # --- Функции Отзывов ---
 
 async def start_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Начинает процесс сбора отзыва."""
+    user = update.effective_user
     query = update.callback_query
     keyboard=[]
     # Унифицируем, через что отправлять сообщение/редактировать
@@ -275,6 +403,8 @@ async def start_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     else:
         logger.error("start_review вызван без update.message или update.callback_query")
         return ConversationHandler.END # Завершаем, если не удалось определить, куда отвечать
+    _log_user(user)
+    _log_message(update) # Логируем само сообщение
     return REVIEW_TEXT
 
 async def process_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -296,20 +426,20 @@ async def process_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     }
 
     admin_notification_text = f"📢 НОВЫЙ ОТЗЫВ ОТ ГОСТЯ: \n\nОт: {user.mention_html()} (ID: {user.id} )\n"
+    review_successfully_processed = False # Флаг для отслеживания успешной обработки
     
     # --- Определяем тип сообщения и сохраняем данные ---
     if message.text:
         review_entry["text"] = message.text
         review_entry["type"] = "text"
         admin_notification_text += f"Текст отзыва: {escape(message.text)}" # Экранируем для админов
-
         # Отправляем сообщение админам
         await context.bot.send_message(
             chat_id=ADMIN_CHAT_ID,
             text=admin_notification_text,
             parse_mode="HTML"
         )
-
+        review_successfully_processed = True
     elif message.photo:
         photo_file_id = message.photo[-1].file_id # Самое большое разрешение
         review_entry["file_id"] = photo_file_id
@@ -320,7 +450,6 @@ async def process_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             admin_notification_text += f"Подпись: {escape(message.caption)}"
         else:
             admin_notification_text += "Без подписи"
-
         # Пересылаем фото админам
         await context.bot.send_photo(
             chat_id=ADMIN_CHAT_ID,
@@ -328,7 +457,7 @@ async def process_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             caption=admin_notification_text,
             parse_mode="HTML"
         )
-
+        review_successfully_processed = True
     elif message.video:
         video_file_id = message.video.file_id
         review_entry["file_id"] = video_file_id
@@ -339,14 +468,13 @@ async def process_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             admin_notification_text += f"Подпись: {escape(message.caption)}"
         else:
             admin_notification_text += "Без подписи"
-
         # Пересылаем видео админам
         await context.bot.send_video(
             chat_id=ADMIN_CHAT_ID,
             video=video_file_id,
             caption=admin_notification_text,parse_mode="HTML"
         )
-
+        review_successfully_processed = True
     elif message.voice:
         voice_file_id = message.voice.file_id
         review_entry["file_id"] = voice_file_id
@@ -357,7 +485,6 @@ async def process_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             admin_notification_text += f"Подпись: {escape(message.caption)}"
         else:
             admin_notification_text += "Без подписи"
-
         # Пересылаем голосовое админам
         await context.bot.send_voice(
             chat_id=ADMIN_CHAT_ID,
@@ -365,11 +492,7 @@ async def process_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             caption=admin_notification_text, # Подпись у голосового может быть короткой
             parse_mode="HTML"
         )
-    # Можно добавить обработку document, audio и других типов, если нужно
-    # elif message.document:
-    #     # ...
-    # elif message.audio:
-    #     # ...
+        review_successfully_processed = True
     else:
         # Если пришло сообщение неподдерживаемого типа
         await update.message.reply_text(
@@ -379,8 +502,11 @@ async def process_review(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return ConversationHandler.END # Завершаем, так как отзыв не получен
 
     # --- Сохраняем отзыв и отвечаем пользователю ---
-    reviews_data.append(review_entry)
-    save_data(REVIEWS_FILE, reviews_data)
+    if review_successfully_processed:
+        # !!! Используем ГЛОБАЛЬНУЮ переменную reviews_data !!!
+        global reviews_data 
+        reviews_data.append(review_entry)
+        save_data(REVIEWS_FILE, reviews_data) # Сохраняем данные в файл
 
     await update.message.reply_text(
        "Спасибо за Ваш отзыв! Мы стараемся для Вас!",
@@ -745,7 +871,7 @@ async def handle_admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 logger.error(f"Error sending reply from admin {admin_id} to user {user_to_reply_id}: {e}")
         else:
             await update.message.reply_text(
-                "Не удалось определить ID пользователя из исходного сообщения. Убедитесь, что исходное сообщение бота содержит ID пользователя в формате Ⓝ<!--user_id:123456789-->Ⓝ."
+                "Не удалось определить ID пользователя из исходного сообщения."
             )
     else:
         # Если админ ответил, но не на сообщение бота, или не в админ-чате
