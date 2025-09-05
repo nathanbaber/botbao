@@ -596,7 +596,7 @@ async def handle_user_message_in_chat(update: Update, context: ContextTypes.DEFA
     message_text = update.message.text
 
     # Игнорируем команды или сообщения из чата админов, если вдруг попали сюда
-    if message.text and message.text.startswith('/') or message.chat_id == ADMIN_CHAT_ID:
+    if message_text and message_text.startswith('/') or message_text.chat_id == ADMIN_CHAT_ID:
         return LIVE_CHAT_USER
 
     # Проверяем, что пользователь действительно в режиме чата
