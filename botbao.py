@@ -16,9 +16,8 @@ from telegram.ext import (
     ConversationHandler, ContextTypes, filters
 )
 from telegram.error import BadRequest
-from telegram_bot_calendar import DetailedTelegramCalendar, LSTEP
-import html
-import pytz 
+from telegram_bot_calendar import DetailedTelegramCalendar
+import pytz
 from html import escape
 
 MOSCOW_TZ = pytz.timezone('Europe/Moscow')
