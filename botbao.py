@@ -720,7 +720,7 @@ async def handle_admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE)
     # Это означает, что админ ответил на сообщение, которое отправил БОТ.
     if message.reply_to_message and message.reply_to_message.from_user.id == context.bot.id:
         # Текст оригинального сообщения, на которое ответил админ
-        original_bot_message_text = message.reply_to_to_message.text or message.reply_to_message.caption
+        original_bot_message_text = message.reply_to_message.text or message.reply_to_message.caption
         
         if not original_bot_message_text:
             await update.message.reply_text("Не удалось найти исходный текст сообщения для определения пользователя.")
