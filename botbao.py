@@ -595,9 +595,13 @@ async def handle_user_message_in_chat(update: Update, context: ContextTypes.DEFA
     user_id = str(user.id)
     message_text = update.message.text
 
+    # Игнорируем команды или сообщения из чата админов, если вдруг попали сюда
+    if message.text and message.text.startswith('/') or message.chat_id == ADMIN_CHAT_ID:
+        return LIVE_CHAT_USER
+
     # Проверяем, что пользователь действительно в режиме чата
     if user_id in user_states_data and user_states_data[user_id].get("state") == "chat_active":
-        admin_message_prefix = f"💬 Сообщение от {user.mention_html()} (user_id: Ⓝ{user_id}Ⓝ):\n\n"
+        admin_message_prefix = f"💬 Новое сообщение от [{user}](tg://user?id={user_id}) (Ⓝ{user_id}Ⓝ)\n\n"
         reply_markup_for_admin = InlineKeyboardMarkup(
             [[InlineKeyboardButton("🚫 Завершить этот чат", callback_data=f"admin_end_chat_{user_id}")]]
         )
@@ -609,9 +613,11 @@ async def handle_user_message_in_chat(update: Update, context: ContextTypes.DEFA
             safe_text = escape(message.text) # Экранируем текст от HTML инъекций
             await context.bot.send_message(
                 chat_id=ADMIN_CHAT_ID,
-                text=f"{admin_message_prefix}{safe_text}",
+                text=f"{admin_message_prefix}{safe_text}"
+                f"\n\n<!--user_id:{user_id}-->", # Скрытый ID для ответа
                 parse_mode="HTML",
-                reply_markup=reply_markup_for_admin
+                reply_markup=reply_markup_for_admin,
+                disable_web_page_preview=True # Отключаем превью ссылок
             )
         elif message.photo:
             # Если это фото
@@ -625,7 +631,8 @@ async def handle_user_message_in_chat(update: Update, context: ContextTypes.DEFA
                 photo=photo_file_id,
                 caption=f"{admin_message_prefix}{safe_caption}",
                 parse_mode="HTML",
-                reply_markup=reply_markup_for_admin
+                reply_markup=reply_markup_for_admin,
+                disable_web_page_preview=True # Отключаем превью ссылок
             )
         elif message.video:
             # Если это видео
@@ -638,7 +645,8 @@ async def handle_user_message_in_chat(update: Update, context: ContextTypes.DEFA
                 video=video_file_id,
                 caption=f"{admin_message_prefix}{safe_caption}",
                 parse_mode="HTML",
-                reply_markup=reply_markup_for_admin
+                reply_markup=reply_markup_for_admin,
+                disable_web_page_preview=True # Отключаем превью ссылок
             )
         elif message.voice:
             # Если это голосовое сообщение
@@ -651,7 +659,8 @@ async def handle_user_message_in_chat(update: Update, context: ContextTypes.DEFA
                 voice=voice_file_id,
                 caption=f"{admin_message_prefix}{safe_caption}",
                 parse_mode="HTML",
-                reply_markup=reply_markup_for_admin
+                reply_markup=reply_markup_for_admin,
+                disable_web_page_preview=True # Отключаем превью ссылок
             )
         elif message.document:
             file_id = message.document.file_id
@@ -662,7 +671,8 @@ async def handle_user_message_in_chat(update: Update, context: ContextTypes.DEFA
                 document=file_id,
                 caption=f"{admin_message_prefix}{safe_caption}",
                 parse_mode="HTML",
-                reply_markup=reply_markup_for_admin
+                reply_markup=reply_markup_for_admin,
+                disable_web_page_preview=True # Отключаем превью ссылок
             )
         else:
             # Если сообщение неизвестного или неподдерживаемого типа
@@ -680,6 +690,66 @@ async def handle_user_message_in_chat(update: Update, context: ContextTypes.DEFA
         await send_main_menu(update, context, "Не удалось определить ваше состояние. Пожалуйста, попробуйте еще раз.")
         return ConversationHandler.END
 
+#Вспомогательная функция для извлечения user_id ---
+def extract_user_id_from_text(text: str) -> int | None:
+    """Извлекает user_id из текста, используя скрытый формат '<!--user_id:12345-->'."""
+    match = re.search(r'<!--user_id:(\d+)-->', text)
+    if match:
+        try:
+            return int(match.group(1))
+        except ValueError:
+            return None
+    return None
+
+async def handle_admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Обрабатывает ответ админа на сообщение, пересланное от пользователя.
+    Отправляет ответ пользователю.
+    """
+    message = update.message
+    admin_id = update.effective_user.id
+    admin_chat_id = update.effective_chat.id # ID чата, откуда пришло сообщение админа
+
+    # Проверяем, что сообщение пришло из чата админа (группы или личного чата админа)
+    # и это не команда
+    if admin_chat_id != ADMIN_CHAT_ID or (message.text and message.text.startswith('/')):
+        return # Игнорируем сообщения не из админ-чата или команды
+
+    # Проверяем, что это ответ на сообщение бота
+    # message.reply_to_message.from_user.id == context.bot.id
+    # Это означает, что админ ответил на сообщение, которое отправил БОТ.
+    if message.reply_to_message and message.reply_to_message.from_user.id == context.bot.id:
+        # Текст оригинального сообщения, на которое ответил админ
+        original_bot_message_text = message.reply_to_to_message.text or message.reply_to_message.caption
+        
+        if not original_bot_message_text:
+            await update.message.reply_text("Не удалось найти исходный текст сообщения для определения пользователя.")
+            return
+
+        # Извлекаем user_id из скрытого HTML-комментария в тексте оригинального сообщения
+        user_to_reply_id = extract_user_id_from_text(original_bot_message_text)
+
+        if user_to_reply_id:
+            try:
+                # Отправляем ответ пользователю
+                await context.bot.send_message(
+                    chat_id=user_to_reply_id, # user_to_reply_id уже int
+                    text=f"💬 *Ответ службы заботы:*\n_{message.text}_",
+                    parse_mode="Markdown"
+                )
+                await update.message.reply_text(f"Ответ успешно отправлен пользователю.")
+                logger.info(f"Админ {admin_id} отправил ответ пользователю {user_to_reply_id}.")
+            except Exception as e:
+                await update.message.reply_text(f"Не удалось отправить ответ пользователю: {e}")
+                logger.error(f"Error sending reply from admin {admin_id} to user {user_to_reply_id}: {e}")
+        else:
+            await update.message.reply_text(
+                "Не удалось определить ID пользователя из исходного сообщения. Убедитесь, что исходное сообщение бота содержит ID пользователя в формате Ⓝ<!--user_id:123456789-->Ⓝ."
+            )
+    else:
+        # Если админ ответил, но не на сообщение бота, или не в админ-чате
+        # Можно игнорировать или добавить лог, чтобы понять, что происходит
+        logger.debug(f"Админ {admin_id} в чате {admin_chat_id} ответил на сообщение, но оно не от бота или не в админ-чате. Игнорируем.")
 
 async def end_live_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Пользователь завершает чат."""
@@ -1317,12 +1387,17 @@ def main() -> None:
     )
     application.add_handler(problem_conversation)
 
+    application.add_handler(MessageHandler(
+        filters.TEXT & filters.Chat(ADMIN_CHAT_ID) & ~filters.COMMAND,
+        handle_admin_reply
+    ))
+
     # ConversationHandler для живого чата
     live_chat_conv_handler = ConversationHandler(
         entry_points=[CallbackQueryHandler(start_live_chat, pattern="^support$")],
         states={
             LIVE_CHAT_USER: [
-                MessageHandler(filters.ALL & ~filters.COMMAND, handle_user_message_in_chat),
+                MessageHandler(filters.ALL & ~filters.COMMAND & ~filters.Chat(ADMIN_CHAT_ID), handle_user_message_in_chat),
                 CallbackQueryHandler(end_live_chat, pattern="^end_chat$")
             ]
         },
@@ -1357,6 +1432,7 @@ def main() -> None:
     )
     application.add_handler(reservation_conversation)
 
+
     # Основные команды
     application.add_handler(CommandHandler("start", start))
 
@@ -1367,12 +1443,16 @@ def main() -> None:
     application.add_handler(CommandHandler("reserve", start_reservation))
     application.add_handler(CommandHandler("help", help_command))
 
+
+
     # Обработчик кнопки "Назад в главное меню"
     application.add_handler(CallbackQueryHandler(send_main_menu, pattern="^start$"))
     # Команда для админов, чтобы отвечать пользователям
     application.add_handler(CommandHandler("reply", reply_to_user))
     # Обработчик для кнопки "Завершить этот чат" для админа
     application.add_handler(CallbackQueryHandler(admin_end_chat, pattern="^admin_end_chat_"))
+
+
     # Обработчик для неизвестных команд и сообщений, если пользователь не в ConversationHandler
     application.add_handler(MessageHandler(filters.COMMAND, unknown))
     # Этот обработчик должен быть ПОСЛЕДНИМ, чтобы не перехватывать сообщения для ConversationHandler
