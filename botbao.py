@@ -1239,6 +1239,25 @@ async def make_order_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         reply_markup=get_main_keyboard()
     )
     
+# --- Новый обработчик для ВСЕХ сообщений ---
+async def handle_all_messages(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # Проверяем тип чата
+    if update.message.chat.type in ["group", "supergroup"]:
+        # Если это группа, просто игнорируем сообщение, если оно не было командой
+        # (команды уже обработаны CommandHandler-ами)
+        # Если бот должен реагировать на что-то конкретное в группе (например, на упоминание),
+        # то это нужно добавить здесь с условием.
+        # Например, если сообщение содержит @имябота
+        if context.bot.username in update.message.text:
+             await update.message.reply_text("Я здесь, если нужна помощь, используйте /help или /menu.")
+        return # Ничего не делаем, бот молчит
+
+    elif update.message.chat.type == "private":
+        # Если это личный чат, можно дать более подробный ответ или предложить меню
+        await update.message.reply_text("Мы получили Ваше сообщение! Для списка команд используйте /help или /start")
+    else:
+        # Для других типов чатов (например, канал), если бот может быть добавлен туда.
+        pass
 
 # --- Главная функция бота ---
 
@@ -1357,8 +1376,11 @@ def main() -> None:
     # Обработчик для неизвестных команд и сообщений, если пользователь не в ConversationHandler
     application.add_handler(MessageHandler(filters.COMMAND, unknown))
     # Этот обработчик должен быть ПОСЛЕДНИМ, чтобы не перехватывать сообщения для ConversationHandler
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, send_main_menu))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_all_messages))
 
+    # Для любых других сообщений (фото, стикеры, голосовые и т.д.)
+    # Бот просто будет их игнорировать, если не добавлены специфические обработчики
+    application.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND & ~filters.TEXT, lambda u, c: None))
 
     logger.info("Бот запускается...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
