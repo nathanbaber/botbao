@@ -602,20 +602,19 @@ async def handle_user_message_in_chat(update: Update, context: ContextTypes.DEFA
 
     # Проверяем, что пользователь действительно в режиме чата
     if user_id in user_states_data and user_states_data[user_id].get("state") == "chat_active":
-        admin_message_prefix = f"💬 Новое сообщение от {user.mention_html()} \n\n"
+        admin_message_prefix = f"💬 Новое сообщение от {user.mention_html()} (ID: {user.id}) \n\n"
         reply_markup_for_admin = InlineKeyboardMarkup(
             [[InlineKeyboardButton("🚫 Завершить этот чат", callback_data=f"admin_end_chat_{user_id}")]]
         )
 
         message = update.message
-        user_info_tag = f"<!--user_id:{user.id}-->"
 
         if message.text:
             # Если это текстовое сообщение
             safe_text = escape(message.text) # Экранируем текст от HTML инъекций
             await context.bot.send_message(
                 chat_id=ADMIN_CHAT_ID,
-                text=f"{user_info_tag}{admin_message_prefix}{safe_text}",
+                text=f"{admin_message_prefix}{safe_text}",
                 parse_mode="HTML",
                 reply_markup=reply_markup_for_admin,
                 disable_web_page_preview=True # Отключаем превью ссылок
@@ -630,7 +629,7 @@ async def handle_user_message_in_chat(update: Update, context: ContextTypes.DEFA
             await context.bot.send_photo(
                 chat_id=ADMIN_CHAT_ID,
                 photo=photo_file_id,
-                caption=f"{user_info_tag}{admin_message_prefix}{safe_text}",
+                caption=f"{admin_message_prefix}{safe_text}",
                 parse_mode="HTML",
                 reply_markup=reply_markup_for_admin,
                 disable_web_page_preview=True # Отключаем превью ссылок
@@ -644,7 +643,7 @@ async def handle_user_message_in_chat(update: Update, context: ContextTypes.DEFA
             await context.bot.send_video(
                 chat_id=ADMIN_CHAT_ID,
                 video=video_file_id,
-                caption=f"{user_info_tag}{admin_message_prefix}{safe_text}",
+                caption=f"{admin_message_prefix}{safe_text}",
                 parse_mode="HTML",
                 reply_markup=reply_markup_for_admin,
                 disable_web_page_preview=True # Отключаем превью ссылок
@@ -658,7 +657,7 @@ async def handle_user_message_in_chat(update: Update, context: ContextTypes.DEFA
             await context.bot.send_voice(
                 chat_id=ADMIN_CHAT_ID,
                 voice=voice_file_id,
-                caption=f"{user_info_tag}{admin_message_prefix}{safe_text}",
+                caption=f"{admin_message_prefix}{safe_text}",
                 parse_mode="HTML",
                 reply_markup=reply_markup_for_admin,
                 disable_web_page_preview=True # Отключаем превью ссылок
@@ -670,7 +669,7 @@ async def handle_user_message_in_chat(update: Update, context: ContextTypes.DEFA
             await context.bot.send_document(
                 chat_id=ADMIN_CHAT_ID,
                 document=file_id,
-                caption=f"{user_info_tag}{admin_message_prefix}{safe_text}",
+                caption=f"{admin_message_prefix}{safe_text}",
                 parse_mode="HTML",
                 reply_markup=reply_markup_for_admin,
                 disable_web_page_preview=True # Отключаем превью ссылок
@@ -693,8 +692,7 @@ async def handle_user_message_in_chat(update: Update, context: ContextTypes.DEFA
 
 #Вспомогательная функция для извлечения user_id ---
 def extract_user_id_from_text(text: str) -> int | None:
-    """Извлекает user_id из текста, используя скрытый формат '<!--user_id:12345-->'."""
-    match = re.search(r'<!--user_id:(\d+)-->', text)
+    match = re.search(r'user_id:(\d+)', text)
     if match:
         try:
             return int(match.group(1))
