@@ -690,9 +690,11 @@ async def handle_user_message_in_chat(update: Update, context: ContextTypes.DEFA
         await send_main_menu(update, context, "Не удалось определить ваше состояние. Пожалуйста, попробуйте еще раз.")
         return ConversationHandler.END
 
-#Вспомогательная функция для извлечения user_id ---
+# --- НОВАЯ/МОДИФИЦИРОВАННАЯ Вспомогательная функция для извлечения user_id ---
+# Эта функция теперь будет искать ID в формате "(ID: 123456789)"
 def extract_user_id_from_text(text: str) -> int | None:
-    match = re.search(r'user_id:(\d+)', text)
+    # Ищем паттерн "ID: XXXXXX"
+    match = re.search(r'ID:\s*(\d+)', text)
     if match:
         try:
             return int(match.group(1))
@@ -732,7 +734,7 @@ async def handle_admin_reply(update: Update, context: ContextTypes.DEFAULT_TYPE)
             try:
                 # Отправляем ответ пользователю
                 await context.bot.send_message(
-                    chat_id=user_to_reply_id, # user_to_reply_id уже int
+                    chat_id=user_to_reply_id,
                     text=f"💬 *Ответ службы заботы:*\n_{message.text}_",
                     parse_mode="Markdown"
                 )
