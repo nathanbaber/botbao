@@ -584,7 +584,7 @@ async def start_live_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         chat_id=ADMIN_CHAT_ID,
         text=f"🗣️ НОВЫЙ ЗАПРОС В ПОДДЕРЖКУ: \n\n"
              f"От: {user.mention_html()} \n"
-             f"Напишите /reply {user.id} для ответа пользователю.",
+             f"Напишите /reply {user.id} для ответа пользователю или нажмите 'ответить' и напишите сообщение.",
         parse_mode="HTML"
     )
     return LIVE_CHAT_USER
@@ -603,7 +603,7 @@ async def handle_user_message_in_chat(update: Update, context: ContextTypes.DEFA
 
     # Проверяем, что пользователь действительно в режиме чата
     if user_id in user_states_data and user_states_data[user_id].get("state") == "chat_active":
-        admin_message_prefix = f"💬 Новое сообщение от [{user}](tg://user?id={user_id}) (Ⓝ{user_id}Ⓝ)\n\n"
+        admin_message_prefix = f"💬 Новое сообщение от {user.mention_html()} \n\n"
         reply_markup_for_admin = InlineKeyboardMarkup(
             [[InlineKeyboardButton("🚫 Завершить этот чат", callback_data=f"admin_end_chat_{user_id}")]]
         )
