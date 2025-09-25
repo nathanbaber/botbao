@@ -933,9 +933,9 @@ async def admin_end_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         except Exception as e:
             logger.error(f"Could not send message to user {user_to_end_id}: {e}")
 
-        await query.edit_message_text(f"Чат с {user_to_end_id.mention_html()} завершен.")
+        await query.edit_message_text(f"Чат с {user_to_end_id} завершен.")
     else:
-        await query.edit_message_text(f"Активный чат {user_to_end_id.mention_html()} не найден.")
+        await query.edit_message_text(f"Активный чат {user_to_end_id} не найден.")
     await query.answer()
 
 
