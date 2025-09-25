@@ -927,7 +927,7 @@ async def admin_end_chat(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         try:
             await context.bot.send_message(
                 chat_id=int(user_to_end_id),
-                text="Менеджер завершил чат с Вами. Если у Вас есть другие вопросы, пожалуйста, воспользуйтесь главным меню ли начните чат заново.",
+                text="Менеджер завершил чат с Вами. Если у Вас есть другие вопросы, пожалуйста, воспользуйтесь главным меню или начните чат заново.",
                 reply_markup=get_main_keyboard()
             )
         except Exception as e:
