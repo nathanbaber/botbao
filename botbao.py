@@ -16,9 +16,12 @@ from telegram.ext import (
     ConversationHandler, ContextTypes, filters
 )
 from telegram.error import BadRequest
+from telegram import Bot
 from telegram_bot_calendar import DetailedTelegramCalendar
 import pytz
 from html import escape
+
+
 
 MOSCOW_TZ = pytz.timezone('Europe/Moscow')
 
@@ -33,7 +36,10 @@ DATA_LOCK = threading.Lock() # Для безопасной работы с фа�
 
 # --- КОНФИГУРАЦИЯ БОТА ---
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+bot = Bot(token=BOT_TOKEN)
 ADMIN_CHAT_ID = int(os.getenv("ADMIN_CHAT_ID"))
+success = bot.delete_webhook()
+
            
 # --------------------------
 
